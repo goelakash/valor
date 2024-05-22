@@ -19,37 +19,43 @@ from valor.schemas import (
     Dictionary,
     EvaluationParameters,
     EvaluationRequest,
-    Filter,
+    FunctionType,
     Label,
     StaticCollection,
     String,
     TypedList,
+    unpack_function,
 )
+from valor.schemas.symbolic.operators import Function
 
-FilterType = Union[list, dict, Filter]  # TODO - Remove this
+FilterType = Union[dict, FunctionType]
 
 
-def _format_filter(filter_by: Optional[FilterType]) -> Filter:
+def _format_filter(filter_: Optional[FilterType]) -> dict:
     """
-    Formats the various filter or constraint representations into a 'schemas.Filter' object.
+    Enforces the formatting of a filter expression.
 
     Parameters
     ----------
-    filter_by : FilterType, optional
+    filter_ : FilterType, optional
         The reference filter.
 
     Returns
     -------
-    valor.schemas.Filter
-        A properly formatted 'schemas.Filter' object.
+    dict
+        An dictionary representation of a symbolic operation.
+
+    Raises
+    ------
+    TypeError
+        If the filter is of an unsupported type.
     """
-    if isinstance(filter_by, Filter):
-        return filter_by
-    elif isinstance(filter_by, list) or filter_by is None:
-        filter_by = filter_by if filter_by else []
-        return Filter.create(filter_by)
-    elif isinstance(filter_by, dict):
-        return Filter(**filter_by)
+    if isinstance(filter_, Function):
+        return filter_.to_dict()
+    elif isinstance(filter_, dict):
+        return unpack_function(filter_).to_dict()
+    elif filter_ is None:
+        return dict()
     else:
         raise TypeError
 
@@ -207,7 +213,7 @@ class Evaluation:
             The ID of the evaluation.
         model_name : str
             The name of the evaluated model.
-        datum_filter : schemas.Filter
+        datum_filter : FunctionType
             The filter used to select the datums for evaluation.
         status : EvaluationStatus
             The status of the evaluation.
@@ -228,7 +234,7 @@ class Evaluation:
         *_,
         id: int,
         model_name: str,
-        datum_filter: Filter,
+        datum_filter: FilterType,
         parameters: EvaluationParameters,
         status: EvaluationStatus,
         metrics: List[Dict],
@@ -240,7 +246,7 @@ class Evaluation:
         self.id = id
         self.model_name = model_name
         self.datum_filter = (
-            Filter(**datum_filter)
+            unpack_function(datum_filter)
             if isinstance(datum_filter, dict)
             else datum_filter
         )
@@ -327,7 +333,7 @@ class Evaluation:
         return {
             "id": self.id,
             "model_name": self.model_name,
-            "datum_filter": asdict(self.datum_filter),
+            "datum_filter": self.datum_filter.to_dict(),
             "parameters": asdict(self.parameters),
             "status": self.status.value,
             "metrics": self.metrics,
@@ -588,13 +594,6 @@ class Dataset(StaticCollection):
             A list of `Datums` associated with the dataset.
         """
         filter_ = _format_filter(filter_by)
-        if isinstance(filter_, Filter):
-            filter_ = asdict(filter_)
-
-        if filter_.get("dataset_names"):
-            raise ValueError(
-                "Cannot filter by dataset_names when calling `Dataset.get_datums`."
-            )
         filter_["dataset_names"] = [self.name]  # type: ignore
         return Client(self.conn).get_datums(filter_by=filter_)
 
@@ -842,33 +841,6 @@ class Model(StaticCollection):
             dataset=dataset, model=self
         )
 
-    def _format_constraints(
-        self,
-        datasets: Optional[Union[Dataset, List[Dataset]]] = None,
-        filter_by: Optional[FilterType] = None,
-    ) -> Filter:
-        """Formats the 'datum_filter' for any evaluation requests."""
-
-        # get list of dataset names
-        dataset_names_from_obj = []
-        if isinstance(datasets, list):
-            dataset_names_from_obj = [dataset.name for dataset in datasets]
-        elif isinstance(datasets, Dataset):
-            dataset_names_from_obj = [datasets.name]
-
-        # create a 'schemas.Filter' object from the constraints.
-        filter_ = _format_filter(filter_by)
-
-        # reset model name
-        filter_.model_names = None
-        filter_.model_metadata = None
-
-        # set dataset names
-        if not filter_.dataset_names:
-            filter_.dataset_names = []
-        filter_.dataset_names.extend(dataset_names_from_obj)  # type: ignore
-        return filter_
-
     def _create_label_map(
         self,
         label_map: Optional[Dict[Label, Label]],
@@ -939,10 +911,9 @@ class Model(StaticCollection):
             )
 
         # format request
-        datum_filter = self._format_constraints(datasets, filter_by)
         request = EvaluationRequest(
             model_names=[self.name],  # type: ignore
-            datum_filter=datum_filter,
+            datum_filter=_format_filter(filter_by),
             parameters=EvaluationParameters(
                 task_type=TaskType.CLASSIFICATION,
                 label_map=self._create_label_map(label_map=label_map),
@@ -1022,10 +993,9 @@ class Model(StaticCollection):
             compute_pr_curves=compute_pr_curves,
             pr_curve_iou_threshold=pr_curve_iou_threshold,
         )
-        datum_filter = self._format_constraints(datasets, filter_by)
         request = EvaluationRequest(
             model_names=[self.name],  # type: ignore
-            datum_filter=datum_filter,
+            datum_filter=_format_filter(filter_by),
             parameters=parameters,
             meta={},
         )
@@ -1186,7 +1156,6 @@ class Client:
             A list of labels.
         """
         filter_ = _format_filter(filter_by)
-        filter_ = asdict(filter_)
         return [Label(**label) for label in self.conn.get_labels(filter_)]
 
     def get_labels_from_dataset(
@@ -1377,13 +1346,10 @@ class Client:
             A list of datasets.
         """
         filter_ = _format_filter(filter_by)
-        if isinstance(filter_, Filter):
-            filter_ = asdict(filter_)
-        dataset_list = []
-        for kwargs in self.conn.get_datasets(filter_):
-            dataset = Dataset.decode_value({**kwargs, "connection": self.conn})
-            dataset_list.append(dataset)
-        return dataset_list
+        return [
+            Dataset.decode_value({**kwargs, "connection": self.conn})
+            for kwargs in self.conn.get_datasets(filter_)
+        ]
 
     def get_datums(
         self,
@@ -1403,8 +1369,6 @@ class Client:
             A list datums.
         """
         filter_ = _format_filter(filter_by)
-        if isinstance(filter_, Filter):
-            filter_ = asdict(filter_)
         return [
             Datum.decode_value(datum)
             for datum in self.conn.get_datums(filter_)
@@ -1642,13 +1606,10 @@ class Client:
             A list of models.
         """
         filter_ = _format_filter(filter_by)
-        if isinstance(filter_, Filter):
-            filter_ = asdict(filter_)
-        model_list = []
-        for kwargs in self.conn.get_models(filter_):
-            model = Model.decode_value({**kwargs, "connection": self.conn})
-            model_list.append(model)
-        return model_list
+        return [
+            Model.decode_value({**kwargs, "connection": self.conn})
+            for kwargs in self.conn.get_models(filter_)
+        ]
 
     def get_model_status(
         self,

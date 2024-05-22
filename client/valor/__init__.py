@@ -19,7 +19,7 @@ from .coretypes import (
     Model,
     Prediction,
 )
-from .schemas import Annotation, Datum, Filter, Label
+from .schemas import Annotation, Datum, Label
 
 __all__ = [
     "connect",
@@ -32,6 +32,5 @@ __all__ = [
     "Annotation",
     "GroundTruth",
     "Prediction",
-    "Filter",
     "Label",
 ]

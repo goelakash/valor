@@ -59,12 +59,10 @@ class EvaluationRequest:
     """
 
     model_names: Union[str, List[str]]
-    datum_filter: Filter
+    datum_filter: dict
     parameters: EvaluationParameters
     meta: Optional[dict]
 
     def __post_init__(self):
-        if isinstance(self.datum_filter, dict):
-            self.datum_filter = Filter(**self.datum_filter)
         if isinstance(self.parameters, dict):
             self.parameters = EvaluationParameters(**self.parameters)

@@ -103,6 +103,7 @@ class EvaluationRequest(BaseModel):
     """
 
     model_names: list[str]
+    dataset_names: list[str]
     datum_filter: Filter
     parameters: EvaluationParameters
     meta: dict[str, str | int | float] | None
