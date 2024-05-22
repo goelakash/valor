@@ -1,7 +1,19 @@
 import operator
 from typing import Callable
 
-from sqlalchemy import TIMESTAMP, Boolean, Float, and_, cast, func, not_, or_
+from geoalchemy2.functions import ST_Area, ST_Count, ST_GeomFromGeoJSON
+from sqlalchemy import (
+    TIMESTAMP,
+    Boolean,
+    Float,
+    Integer,
+    and_,
+    cast,
+    func,
+    not_,
+    or_,
+    select,
+)
 from sqlalchemy.dialects.postgresql import INTERVAL, TEXT
 from sqlalchemy.sql.elements import BinaryExpression, ColumnElement
 
@@ -10,49 +22,41 @@ from valor_api.backend.models import (
     Annotation,
     Dataset,
     Datum,
+    Embedding,
     Label,
     Model,
     Prediction,
 )
 from valor_api.backend.query.types import TableTypeAlias
-from valor_api.schemas import (
-    BooleanFilter,
-    DateTimeFilter,
-    Duration,
-    Filter,
-    GeospatialFilter,
-    NumericFilter,
-    StringFilter,
-    Time,
+from valor_api.schemas import Duration, Time
+from valor_api.schemas.filters import (
+    NArgFunc,
+    OneArgFunc,
+    Symbol,
+    TwoArgFunc,
+    Value,
 )
 
 filterable_types_to_function_category = {
-    "bool": {"equatable"},
-    "string": {"equatable"},
-    "integer": {"equatable", "quantifiable"},
-    "float": {"equatable", "quantifiable"},
-    "datetime": {"equatable", "quantifiable"},
-    "date": {"equatable", "quantifiable"},
-    "time": {"equatable", "quantifiable"},
-    "duration": {"equatable", "quantifiable"},
-    "point": {"equatable", "spatial"},
-    "multipoint": {"spatial"},
-    "linestring": {"spatial"},
-    "multilinestring": {"spatial"},
-    "polygon": {"spatial"},
-    "box": {"spatial"},
-    "multipolygon": {"spatial"},
-    "tasktypeenum": {"equatable"},
-    "raster": {"spatial"},
-    "label": {"equatable"},
+    "bool": {"eq", "ne"},
+    "string": {"eq", "ne"},
+    "integer": {"eq", "ne", "gt", "ge", "lt", "le"},
+    "float": {"eq", "ne", "gt", "ge", "lt", "le"},
+    "datetime": {"eq", "ne", "gt", "ge", "lt", "le"},
+    "date": {"eq", "ne", "gt", "ge", "lt", "le"},
+    "time": {"eq", "ne", "gt", "ge", "lt", "le"},
+    "duration": {"eq", "ne", "gt", "ge", "lt", "le"},
+    "point": {"eq", "ne", "intersects", "inside", "outside"},
+    "multipoint": {"intersects", "inside", "outside"},
+    "linestring": {"intersects", "inside", "outside"},
+    "multilinestring": {"intersects", "inside", "outside"},
+    "polygon": {"intersects", "inside", "outside"},
+    "box": {"intersects", "inside", "outside"},
+    "multipolygon": {"intersects", "inside", "outside"},
+    "raster": {"intersects", "inside", "outside"},
+    "tasktypeenum": {"eq", "ne"},
+    "label": {"eq", "ne"},
     "embedding": {},
-}
-
-
-category_to_supported_functions = {
-    "equatable": {"eq", "ne"},
-    "quantifiable": {"eq", "ne", "gt", "ge", "lt", "le"},
-    "spatial": {"intersects", "inside", "outside"},
 }
 
 
@@ -67,27 +71,194 @@ opstr_to_operator = {
     "inside": lambda lhs, rhs: func.ST_Covers(rhs, lhs),
     "outside": lambda lhs, rhs: not_(func.ST_Covers(rhs, lhs)),
     "contains": None,
+    "isnull": lambda arg : arg.is_(None),
+    "isnotnull": lambda arg : arg.isnot(None),
 }
 
 
-from valor_api.schemas.filters import (
-    Value,
-    OneArgFunc,
-    TwoArgFunc,
-    NArgFunc,
-)
+symbol_name_to_table = {
+    "dataset.name": Dataset,
+    "dataset.metadata": Dataset,
+    "model.name": Model,
+    "model.metadata": Model,
+    "datum.uid": Datum,
+    "datum.metadata": Datum,
+    "annotation.box": Annotation,
+    "annotation.polygon": Annotation,
+    "annotation.raster": Annotation,
+    "annotation.embedding": Embedding,
+    "annotation.metadata": Annotation,
+    "annotation.labels": Label,
+    "label.key": Label,
+    "label.value": Label,
+}
+
+
+symbol_to_value_column = {
+    "dataset.name": Dataset.name,
+    "dataset.metadata": Dataset.meta,
+    "model.name": Dataset.name,
+    "model.metadata": Dataset.meta,
+    "datum.uid": Datum.uid,
+    "datum.metadata": Datum.meta,
+    "annotation.box": Annotation.box,
+    "annotation.polygon": Annotation.polygon,
+    "annotation.raster": Annotation.raster,
+    "annotation.embedding": Embedding.value,
+    "annotation.labels": Label,
+    "annotation.metadata": Annotation.meta,
+    "label.key": Label.key,
+    "label.value": Label.value,
+}
+
+symbol_supports_attribute = {
+    "area": {
+        "annotation.box": lambda x : ST_Area(x),
+        "annotation.polygon": lambda x : ST_Area(x),
+        "annotation.raster": lambda x : ST_Count(x),
+        "dataset.metadata": lambda x : ST_Area(x),
+        "model.metadata": lambda x : ST_Area(x),
+        "datum.metadata": lambda x : ST_Area(x),
+        "annotation.metadata": lambda x : ST_Area(x),
+    }
+}
+
+symbol_supports_key = {
+    "dataset.metadata",
+    "model.metadata",
+    "datum.metadata",
+    "annotation.metadata",
+}
+
+symbol_dtype_to_casting = {
+    "bool": lambda x : x.astext.cast(Boolean),
+    "integer": lambda x : x.astext.cast(Integer),
+    "float": lambda x : x.astext.cast(Float),
+    "string": lambda x : x.astext,
+    "datetime": lambda x : cast(x, TIMESTAMP(timezone=True)),
+    "date": lambda x : cast(x, TIMESTAMP(timezone=True)),
+    "time": lambda x : cast(x, INTERVAL),
+    "duration": lambda x : cast(x, INTERVAL),
+    "point": lambda x : ST_GeomFromGeoJSON(x),
+    "multipoint": lambda x : ST_GeomFromGeoJSON(x),
+    "linestring": lambda x : ST_GeomFromGeoJSON(x),
+    "multilinestring": lambda x : ST_GeomFromGeoJSON(x),
+    "polygon": lambda x : ST_GeomFromGeoJSON(x),
+    "box": lambda x : ST_GeomFromGeoJSON(x),
+    "multipolygon": lambda x : ST_GeomFromGeoJSON(x),
+    "raster": lambda x : ST_GeomFromGeoJSON(x),
+}
+
+value_dtype_to_casting = {
+    "bool": lambda x : x,
+    "integer": lambda x : x,
+    "float": lambda x : x,
+    "string": lambda x : x,
+    "datetime": lambda x : cast(x, TIMESTAMP(timezone=True)),
+    "date": lambda x : cast(x, TIMESTAMP(timezone=True)),
+    "time": lambda x : cast(x, INTERVAL),
+    "duration": lambda x : cast(cast(x, TEXT), INTERVAL),
+    "point": lambda x : ST_GeomFromGeoJSON(x),
+    "multipoint": lambda x : ST_GeomFromGeoJSON(x),
+    "linestring": lambda x : ST_GeomFromGeoJSON(x),
+    "multilinestring": lambda x : ST_GeomFromGeoJSON(x),
+    "polygon": lambda x : ST_GeomFromGeoJSON(x),
+    "box": lambda x : ST_GeomFromGeoJSON(x),
+    "multipolygon": lambda x : ST_GeomFromGeoJSON(x),
+    "raster": lambda x : ST_GeomFromGeoJSON(x),
+}
+
+
+def convert_symbol_to_sql(symbol: Symbol):
+    if not isinstance(symbol, Symbol):
+        raise TypeError
+
+    # get table column
+    if symbol.name not in symbol_to_value_column:
+        raise ValueError
+    col = symbol_to_value_column[symbol.name]
+
+    if symbol.key:
+        # add keying
+        if symbol.name not in symbol_supports_key:
+            raise ValueError
+        col = col[symbol.key]
+
+        # type cast
+        if symbol.dtype not in symbol_dtype_to_casting:
+            raise ValueError
+        col = symbol_dtype_to_casting[symbol.dtype](col)
+
+    # add attribute modifier
+    if symbol.attribute:
+        if symbol.attribute not in symbol_supports_attribute:
+            raise ValueError
+        if symbol.name not in symbol_supports_attribute[symbol.attribute]:
+            raise ValueError
+        col = symbol_supports_attribute[symbol.attribute][symbol.name](col)
+
+    return col
+
+
+def convert_value_to_sql(value: Value):
+    if not isinstance(value, Value):
+        raise TypeError
+    elif isinstance(value.value, Symbol):
+        return convert_symbol_to_sql(value.value)
+
+
+
+
+# def create_cte_from_one_arg_func(op: str, arg: Value):
+#     if op not in filterable_types_to_function_category[arg.type]:
+#         raise NotImplementedError(f"Operator '{op}' not implemented for type '{arg.type}'.")
+
+
+
+
+
+#     if key:
+#         if name not in symbol_supports_key:
+#             raise ValueError
+#         col = col[key]
+#     if attr:
+#         if attr not in symbol_supports_attribute:
+#             raise ValueError
+#         elif name not in symbol_supports_attribute[attr]
+#             raise ValueError
+#         col =
+
+
+
+#     row_id = symbol_name_to_id_column[name]
+#     row_value = symbol_name_to_value_column[name]
+
+#     if name in symbol_represents_jsonb:
+#         if not key:
+#             raise ValueError
+#         row_value = row_value[key]
+
+#     elif key:
+#         raise ValueError
+
+
+#     elif
+
+
+#     return select(id).where(opstr_to_operator[op](value)).cte()
 
 
 def _recursive_search_logic_tree(func: OneArgFunc | TwoArgFunc | NArgFunc):
     if isinstance(func, OneArgFunc):
         arg = func.arg
-        if not isinstance(func.arg, Value):
+        if isinstance(arg, Value):
+            return select().where().cte()
             arg = _recursive_search_logic_tree(arg)
         return arg
     elif isinstance(func, TwoArgFunc):
         lhs = func.lhs
         rhs = func.rhs
-        if not isinstance(lhs, Value):
+        if isinstance(lhs, Value):
             lhs = _recursive_search_logic_tree(lhs)
         if not isinstance(rhs, Value):
             rhs = _recursive_search_logic_tree(rhs)
@@ -102,360 +273,6 @@ def _recursive_search_logic_tree(func: OneArgFunc | TwoArgFunc | NArgFunc):
         return args
 
 
-
 def create_logic_tree(filter_):
     pass
 
-
-def _flatten_expressions(
-    expressions: list[list[BinaryExpression]],
-) -> list[ColumnElement[bool] | BinaryExpression]:
-    """Flattens a nested list of expressions."""
-    return [
-        or_(*exprlist) if len(exprlist) > 1 else exprlist[0]
-        for exprlist in expressions
-    ]
-
-
-def _filter_by_metadatum(
-    key: str,
-    value_filter: NumericFilter
-    | StringFilter
-    | BooleanFilter
-    | DateTimeFilter
-    | GeospatialFilter,
-    table: TableTypeAlias,
-) -> BinaryExpression:
-    """
-    Filter by metadatum.
-
-    Supports all existing filter types.
-    """
-    if isinstance(value_filter, NumericFilter):
-        op = _get_numeric_op(value_filter.operator)
-        lhs = table.meta[key].astext.cast(Float)
-        rhs = value_filter.value
-    elif isinstance(value_filter, StringFilter):
-        op = _get_string_op(value_filter.operator)
-        lhs = table.meta[key].astext
-        rhs = value_filter.value
-    elif isinstance(value_filter, BooleanFilter):
-        op = _get_boolean_op(value_filter.operator)
-        lhs = table.meta[key].astext.cast(Boolean)
-        rhs = value_filter.value
-    elif isinstance(value_filter, DateTimeFilter):
-        lhs_operand = table.meta[key]["value"].astext
-        rhs_operand = value_filter.value.value
-        if isinstance(value_filter.value, Time):
-            lhs = cast(lhs_operand, INTERVAL)
-            rhs = cast(rhs_operand, INTERVAL)
-        elif isinstance(value_filter.value, Duration):
-            lhs = cast(lhs_operand, INTERVAL)
-            rhs = cast(cast(rhs_operand, TEXT), INTERVAL)
-        else:
-            lhs = cast(lhs_operand, TIMESTAMP(timezone=True))
-            rhs = cast(rhs_operand, TIMESTAMP(timezone=True))
-        op = _get_numeric_op(value_filter.operator)
-    elif isinstance(value_filter, GeospatialFilter):
-        op = _get_spatial_op(value_filter.operator)
-        lhs = func.ST_GeomFromGeoJSON(table.meta[key]["value"])
-        rhs = func.ST_GeomFromGeoJSON(value_filter.value.model_dump_json())
-    else:
-        raise NotImplementedError(
-            f"Filter with type `{type(value_filter)}` is currently not supported"
-        )
-    return op(lhs, rhs)
-
-
-def _filter_by_metadata(
-    metadata: dict[
-        str,
-        list[
-            NumericFilter
-            | StringFilter
-            | BooleanFilter
-            | DateTimeFilter
-            | GeospatialFilter
-        ],
-    ],
-    table: TableTypeAlias,
-) -> list[ColumnElement[bool]] | list[BinaryExpression]:
-    """
-    Iterates through a dictionary containing metadata.
-    """
-    expressions = [
-        _filter_by_metadatum(key, value, table)
-        for key, f_list in metadata.items()
-        for value in f_list
-    ]
-    if len(expressions) > 1:
-        expressions = [and_(*expressions)]
-    return expressions
-
-
-def filter_by_dataset(
-    filter_: Filter,
-) -> list[ColumnElement[bool] | BinaryExpression]:
-    """
-    Constructs sqlalchemy expressions using dataset filters.
-
-    Parameters
-    ----------
-    filter_ : schemas.Filter
-        The filter to apply.
-
-    Returns
-    -------
-    list[ColumnElement[bool] | BinaryExpression]
-        A list of expressions that can be used in a WHERE clause.
-    """
-    expressions = []
-    if filter_.dataset_names:
-        expressions.append(
-            [
-                Dataset.name == name
-                for name in filter_.dataset_names
-                if isinstance(name, str)
-            ]
-        )
-    if filter_.dataset_metadata:
-        expressions.append(
-            _filter_by_metadata(filter_.dataset_metadata, Dataset),
-        )
-    return _flatten_expressions(expressions)
-
-
-def filter_by_model(
-    filter_: Filter,
-) -> list[ColumnElement[bool] | BinaryExpression]:
-    """
-    Constructs sqlalchemy expressions using model filters.
-
-    Parameters
-    ----------
-    filter_ : schemas.Filter
-        The filter to apply.
-
-    Returns
-    -------
-    list[ColumnElement[bool] | BinaryExpression]
-        A list of expressions that can be used in a WHERE clause.
-    """
-    expressions = []
-    if filter_.model_names:
-        expressions.append(
-            [
-                Model.name == name
-                for name in filter_.model_names
-                if isinstance(name, str)
-            ],
-        )
-    if filter_.model_metadata:
-        expressions.append(
-            _filter_by_metadata(filter_.model_metadata, Model),
-        )
-    return _flatten_expressions(expressions)
-
-
-def filter_by_datum(
-    filter_: Filter,
-) -> list[ColumnElement[bool] | BinaryExpression]:
-    """
-    Constructs sqlalchemy expressions using datum filters.
-
-    Parameters
-    ----------
-    filter_ : schemas.Filter
-        The filter to apply.
-
-    Returns
-    -------
-    list[ColumnElement[bool] | BinaryExpression]
-        A list of expressions that can be used in a WHERE clause.
-    """
-    expressions = []
-    if filter_.datum_uids:
-        expressions.append(
-            [
-                Datum.uid == uid
-                for uid in filter_.datum_uids
-                if isinstance(uid, str)
-            ],
-        )
-    if filter_.datum_metadata:
-        expressions.append(
-            _filter_by_metadata(
-                metadata=filter_.datum_metadata,
-                table=Datum,
-            ),
-        )
-    return _flatten_expressions(expressions)
-
-
-def filter_by_annotation(
-    filter_: Filter,
-) -> list[ColumnElement[bool] | BinaryExpression]:
-    """
-    Constructs sqlalchemy expressions using annotation filters.
-
-    Parameters
-    ----------
-    filter_ : schemas.Filter
-        The filter to apply.
-
-    Returns
-    -------
-    list[ColumnElement[bool] | BinaryExpression]
-        A list of expressions that can be used in a WHERE clause.
-    """
-    expressions = []
-    if filter_.task_types:
-        expressions.append(
-            [
-                Annotation.task_type == task_type.value
-                for task_type in filter_.task_types
-                if isinstance(task_type, enums.TaskType)
-            ],
-        )
-    if filter_.annotation_metadata:
-        expressions.append(
-            _filter_by_metadata(filter_.annotation_metadata, Annotation),
-        )
-
-    # geometry requirement
-    if filter_.require_bounding_box is not None:
-        if filter_.require_bounding_box:
-            expressions.append([Annotation.box.isnot(None)])
-        else:
-            expressions.append([Annotation.box.is_(None)])
-    if filter_.require_polygon is not None:
-        if filter_.require_polygon:
-            expressions.append([Annotation.polygon.isnot(None)])
-        else:
-            expressions.append([Annotation.polygon.is_(None)])
-    if filter_.require_raster is not None:
-        if filter_.require_raster:
-            expressions.append([Annotation.raster.isnot(None)])
-        else:
-            expressions.append([Annotation.raster.is_(None)])
-
-    # geometric area - AND like-typed filter_, OR different-typed filter_
-    area_expr = []
-    if filter_.bounding_box_area:
-        bounding_box_area_expr = []
-        for area_filter in filter_.bounding_box_area:
-            op = _get_numeric_op(area_filter.operator)
-            bounding_box_area_expr.append(
-                op(func.ST_Area(Annotation.box), area_filter.value)
-            )
-        if len(bounding_box_area_expr) > 1:
-            area_expr.append(and_(*bounding_box_area_expr))
-        else:
-            area_expr.append(bounding_box_area_expr[0])
-    if filter_.polygon_area:
-        polygon_area_expr = []
-        for area_filter in filter_.polygon_area:
-            op = _get_numeric_op(area_filter.operator)
-            polygon_area_expr.append(
-                op(
-                    func.ST_Area(Annotation.polygon),
-                    area_filter.value,
-                )
-            )
-        if len(polygon_area_expr) > 1:
-            area_expr.append(and_(*polygon_area_expr))
-        else:
-            area_expr.append(polygon_area_expr[0])
-    if filter_.raster_area:
-        raster_area_expr = []
-        for area_filter in filter_.raster_area:
-            op = _get_numeric_op(area_filter.operator)
-            raster_area_expr.append(
-                op(
-                    func.ST_Count(Annotation.raster),
-                    area_filter.value,
-                )
-            )
-        if len(raster_area_expr) > 1:
-            area_expr.append(and_(*raster_area_expr))
-        else:
-            area_expr.append(raster_area_expr[0])
-    if area_expr:
-        expressions.append(area_expr)
-
-    return _flatten_expressions(expressions)
-
-
-def filter_by_label(
-    filter_: Filter,
-) -> list[ColumnElement[bool] | BinaryExpression]:
-    """
-    Constructs sqlalchemy expressions using label filters.
-
-    Parameters
-    ----------
-    filter_ : schemas.Filter
-        The filter to apply.
-
-    Returns
-    -------
-    list[ColumnElement[bool] | BinaryExpression]
-        A list of expressions that can be used in a WHERE clause.
-    """
-    expressions = []
-    if filter_.label_ids:
-        expressions.append(
-            [
-                Label.id == id
-                for id in filter_.label_ids
-                if isinstance(id, int)
-            ],
-        )
-    if filter_.labels:
-        expressions.append(
-            [
-                and_(
-                    Label.key == key,
-                    Label.value == value,
-                )
-                for label in filter_.labels
-                if (isinstance(label, dict) and len(label) == 1)
-                for key, value in label.items()
-            ],
-        )
-    if filter_.label_keys:
-        expressions.append(
-            [
-                Label.key == key
-                for key in filter_.label_keys
-                if isinstance(key, str)
-            ],
-        )
-
-    return _flatten_expressions(expressions)
-
-
-def filter_by_prediction(
-    filter_: Filter,
-) -> list[ColumnElement[bool] | BinaryExpression]:
-    """
-    Constructs sqlalchemy expressions using prediction filters.
-
-    Parameters
-    ----------
-    filter_ : schemas.Filter
-        The filter to apply.
-
-    Returns
-    -------
-    list[ColumnElement[bool] | BinaryExpression]
-        A list of expressions that can be used in a WHERE clause.
-    """
-    expressions = []
-    if filter_.label_scores:
-        for score_filter in filter_.label_scores:
-            op = _get_numeric_op(score_filter.operator)
-            expressions.append(
-                [op(Prediction.score, score_filter.value)],
-            )
-    return _flatten_expressions(expressions)

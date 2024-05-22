@@ -1,34 +1,24 @@
 from typing import Any
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    create_model,
-    field_validator,
-    model_validator,
-)
 
-from valor_api.enums import TaskType
-from valor_api.schemas.types import Label
-from valor_api.schemas.geometry import GeoJSON
-from valor_api.schemas.timestamp import Date, DateTime, Duration, Time
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+
 from valor_api.schemas.validators import (
     validate_type_bool,
-    validate_type_integer,
-    validate_type_float,
-    validate_type_string,
-    validate_type_datetime,
+    validate_type_box,
     validate_type_date,
-    validate_type_time,
+    validate_type_datetime,
     validate_type_duration,
-    validate_type_point,
-    validate_type_multipoint,
+    validate_type_float,
+    validate_type_integer,
     validate_type_linestring,
     validate_type_multilinestring,
-    validate_type_polygon,
-    validate_type_box,
+    validate_type_multipoint,
     validate_type_multipolygon,
+    validate_type_point,
+    validate_type_polygon,
+    validate_type_string,
+    validate_type_time,
 )
-
 
 filterable_types_to_validator = {
     "bool": validate_type_bool,
@@ -49,13 +39,21 @@ filterable_types_to_validator = {
     "tasktypeenum": validate_type_string,
     "label": None,
     "embedding": None,
-    "raster": None
+    "raster": None,
+    "symbol": None,
 }
+
+
+class Symbol(BaseModel):
+    name: str
+    key: str | None = None
+    attribute: str | None = None
+    dtype: str
 
 
 class Value(BaseModel):
     type: str
-    value: bool | int | float | str | list | dict
+    value: bool | int | float | str | Symbol | list | dict
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
@@ -65,7 +63,9 @@ class Value(BaseModel):
             raise TypeError(f"Value of type '{self.type}' are not supported.")
         validator = filterable_types_to_validator[self.type]
         if validator is None:
-            raise NotImplementedError(f"A validator for type '{self.type}' has not been implemented.")
+            raise NotImplementedError(
+                f"A validator for type '{self.type}' has not been implemented."
+            )
         validator(self.value)
 
 
