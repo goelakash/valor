@@ -26,54 +26,85 @@ from valor_api.schemas import (
     Time,
 )
 
-
-def _get_boolean_op(opstr) -> Callable:
-    """Returns function if operator is valid for boolean comparison."""
-    ops = {
-        "==": operator.eq,
-        "!=": operator.ne,
-    }
-    if opstr not in ops:
-        raise ValueError(f"invalid boolean comparison operator `{opstr}`")
-    return ops[opstr]
-
-
-def _get_string_op(opstr) -> Callable:
-    """Returns function if operator is valid for string comparison."""
-    ops = {
-        "==": operator.eq,
-        "!=": operator.ne,
-    }
-    if opstr not in ops:
-        raise ValueError(f"invalid string comparison operator `{opstr}`")
-    return ops[opstr]
-
-
-def _get_numeric_op(opstr) -> Callable:
-    """Returns function if operator is valid for numeric comparison."""
-    ops = {
-        ">": operator.gt,
-        "<": operator.lt,
-        ">=": operator.ge,
-        "<=": operator.le,
-        "==": operator.eq,
-        "!=": operator.ne,
-    }
-    if opstr not in ops:
-        raise ValueError(f"invalid numeric comparison operator `{opstr}`")
-    return ops[opstr]
+filterable_types_to_function_category = {
+    "bool": {"equatable"},
+    "string": {"equatable"},
+    "integer": {"equatable", "quantifiable"},
+    "float": {"equatable", "quantifiable"},
+    "datetime": {"equatable", "quantifiable"},
+    "date": {"equatable", "quantifiable"},
+    "time": {"equatable", "quantifiable"},
+    "duration": {"equatable", "quantifiable"},
+    "point": {"equatable", "spatial"},
+    "multipoint": {"spatial"},
+    "linestring": {"spatial"},
+    "multilinestring": {"spatial"},
+    "polygon": {"spatial"},
+    "box": {"spatial"},
+    "multipolygon": {"spatial"},
+    "tasktypeenum": {"equatable"},
+    "raster": {"spatial"},
+    "label": {"equatable"},
+    "embedding": {},
+}
 
 
-def _get_spatial_op(opstr) -> Callable:
-    """Returns function if operator is valid for spatial comparison."""
-    ops = {
-        "intersect": lambda lhs, rhs: func.ST_Intersects(lhs, rhs),
-        "inside": lambda lhs, rhs: func.ST_Covers(rhs, lhs),
-        "outside": lambda lhs, rhs: not_(func.ST_Covers(rhs, lhs)),
-    }
-    if opstr not in ops:
-        raise ValueError(f"invalid spatial operator `{opstr}`")
-    return ops[opstr]
+category_to_supported_functions = {
+    "equatable": {"eq", "ne"},
+    "quantifiable": {"eq", "ne", "gt", "ge", "lt", "le"},
+    "spatial": {"intersects", "inside", "outside"},
+}
+
+
+opstr_to_operator = {
+    "eq": operator.eq,
+    "ne": operator.ne,
+    "gt": operator.gt,
+    "ge": operator.ge,
+    "lt": operator.lt,
+    "le": operator.le,
+    "intersect": lambda lhs, rhs: func.ST_Intersects(lhs, rhs),
+    "inside": lambda lhs, rhs: func.ST_Covers(rhs, lhs),
+    "outside": lambda lhs, rhs: not_(func.ST_Covers(rhs, lhs)),
+    "contains": None,
+}
+
+
+from valor_api.schemas.filters import (
+    Value,
+    OneArgFunc,
+    TwoArgFunc,
+    NArgFunc,
+)
+
+
+def _recursive_search_logic_tree(func: OneArgFunc | TwoArgFunc | NArgFunc):
+    if isinstance(func, OneArgFunc):
+        arg = func.arg
+        if not isinstance(func.arg, Value):
+            arg = _recursive_search_logic_tree(arg)
+        return arg
+    elif isinstance(func, TwoArgFunc):
+        lhs = func.lhs
+        rhs = func.rhs
+        if not isinstance(lhs, Value):
+            lhs = _recursive_search_logic_tree(lhs)
+        if not isinstance(rhs, Value):
+            rhs = _recursive_search_logic_tree(rhs)
+        return (lhs, rhs)
+    elif isinstance(func, NArgFunc):
+        args = [
+            arg
+            if isinstance(arg, Value)
+            else _recursive_search_logic_tree(arg)
+            for arg in func.args
+        ]
+        return args
+
+
+
+def create_logic_tree(filter_):
+    pass
 
 
 def _flatten_expressions(

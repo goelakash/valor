@@ -1,5 +1,4 @@
-import json
-
+from typing import Any
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -9,36 +8,48 @@ from pydantic import (
 )
 
 from valor_api.enums import TaskType
+from valor_api.schemas.types import Label
 from valor_api.schemas.geometry import GeoJSON
 from valor_api.schemas.timestamp import Date, DateTime, Duration, Time
+from valor_api.schemas.validators import (
+    validate_type_bool,
+    validate_type_integer,
+    validate_type_float,
+    validate_type_string,
+    validate_type_datetime,
+    validate_type_date,
+    validate_type_time,
+    validate_type_duration,
+    validate_type_point,
+    validate_type_multipoint,
+    validate_type_linestring,
+    validate_type_multilinestring,
+    validate_type_polygon,
+    validate_type_box,
+    validate_type_multipolygon,
+)
 
-category_to_supported_functions = {
-    "equatable": {"eq", "ne"},
-    "quantifiable": {"eq", "ne", "gt", "ge", "lt", "le"},
-    "spatial": {"intersects", "inside", "outside"},
-}
 
-
-filterable_types_to_function_category = {
-    "bool": {"equatable"},
-    "string": {"equatable"},
-    "integer": {"equatable", "quantifiable"},
-    "float": {"equatable", "quantifiable"},
-    "datetime": {"equatable", "quantifiable"},
-    "date": {"equatable", "quantifiable"},
-    "time": {"equatable", "quantifiable"},
-    "duration": {"equatable", "quantifiable"},
-    "point": {"equatable", "spatial"},
-    "multipoint": {"spatial"},
-    "linestring": {"spatial"},
-    "multilinestring": {"spatial"},
-    "polygon": {"spatial"},
-    "box": {"spatial"},
-    "multipolygon": {"spatial"},
-    "tasktypeenum": {"equatable"},
-    "raster": {"spatial"},
-    "label": {"equatable"},
-    "embedding": {},
+filterable_types_to_validator = {
+    "bool": validate_type_bool,
+    "string": validate_type_string,
+    "integer": validate_type_integer,
+    "float": validate_type_float,
+    "datetime": validate_type_datetime,
+    "date": validate_type_date,
+    "time": validate_type_time,
+    "duration": validate_type_duration,
+    "point": validate_type_point,
+    "multipoint": validate_type_multipoint,
+    "linestring": validate_type_linestring,
+    "multilinestring": validate_type_multilinestring,
+    "polygon": validate_type_polygon,
+    "box": validate_type_box,
+    "multipolygon": validate_type_multipolygon,
+    "tasktypeenum": validate_type_string,
+    "label": None,
+    "embedding": None,
+    "raster": None
 }
 
 
@@ -47,15 +58,15 @@ class Value(BaseModel):
     value: bool | int | float | str | list | dict
     model_config = ConfigDict(extra="forbid")
 
-    @field_validator("type")
-    @classmethod
-    def _validate_type_string(cls, type_: str) -> str:
-        """Validate the type string."""
-        if type_ != "bool":
-            raise ValueError(
-                f"Recieved value with type '{type(bool)}' with a declared typing of '{type_}'."
-            )
-        return type_
+    @model_validator(mode="after")
+    def _validate_value(self):
+        self.type = self.type.lower()
+        if self.type not in filterable_types_to_validator:
+            raise TypeError(f"Value of type '{self.type}' are not supported.")
+        validator = filterable_types_to_validator[self.type]
+        if validator is None:
+            raise NotImplementedError(f"A validator for type '{self.type}' has not been implemented.")
+        validator(self.value)
 
 
 class OneArgFunc(BaseModel):
