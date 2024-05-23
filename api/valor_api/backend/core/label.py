@@ -14,8 +14,8 @@ LabelMapType = list[list[list[str]]]
 def validate_matching_label_keys(
     db: Session,
     label_map: LabelMapType | None,
-    prediction_filter: schemas.Filter,
-    groundtruth_filter: schemas.Filter,
+    prediction_filter: schemas.FilterType,
+    groundtruth_filter: schemas.FilterType,
 ) -> None:
     """
     Validates that every datum has the same set of label keys for both ground truths and predictions. This check is only needed for classification tasks.
@@ -24,9 +24,9 @@ def validate_matching_label_keys(
     ----------
     db : Session
         The database Session to query against.
-    prediction_filter : schemas.Filter
+    prediction_filter : schemas.FilterType
         The filter to be used to query predictions.
-    groundtruth_filter : schemas.Filter
+    groundtruth_filter : schemas.FilterType
         The filter to be used to query groundtruths.
     label_map: LabelMapType, optional
         Optional mapping of individual labels to a grouper label. Useful when you need to evaluate performance using labels that differ across datasets and models.
@@ -236,7 +236,7 @@ def create_labels(
 
 def _getter_statement(
     selection,
-    filters: schemas.Filter | None = None,
+    filters: schemas.FilterType | None = None,
     ignore_groundtruths: bool = False,
     ignore_predictions: bool = False,
 ) -> Subquery | Select:
@@ -255,7 +255,7 @@ def _getter_statement(
 
 def get_labels(
     db: Session,
-    filters: schemas.Filter | None = None,
+    filters: schemas.FilterType | None = None,
     ignore_groundtruths: bool = False,
     ignore_predictions: bool = False,
 ) -> set[schemas.Label]:
@@ -266,7 +266,7 @@ def get_labels(
     ----------
     db : Session
         The database Session to query against.
-    filters : schemas.Filter
+    filters : schemas.FilterType
         An optional filter to apply.
     ignore_groundtruths : bool, default=False
         An optional toggle to ignore labels associated with groundtruths.
@@ -292,7 +292,7 @@ def get_labels(
 
 def get_paginated_labels(
     db: Session,
-    filters: schemas.Filter | None = None,
+    filters: schemas.FilterType | None = None,
     ignore_groundtruths: bool = False,
     ignore_predictions: bool = False,
     offset: int = 0,
@@ -305,7 +305,7 @@ def get_paginated_labels(
     ----------
     db : Session
         The database Session to query against.
-    filters : schemas.Filter
+    filters : schemas.FilterType
         An optional filter to apply.
     ignore_groundtruths : bool, default=False
         An optional toggle to ignore labels associated with groundtruths.
@@ -361,7 +361,7 @@ def get_paginated_labels(
 
 def get_label_keys(
     db: Session,
-    filters: schemas.Filter | None = None,
+    filters: schemas.FilterType | None = None,
     ignore_groundtruths: bool = False,
     ignore_predictions: bool = False,
 ) -> set[str]:
@@ -372,7 +372,7 @@ def get_label_keys(
     ----------
     db : Session
         The database Session to query against.
-    filters : schemas.Filter
+    filters : schemas.FilterType
         An optional filter to apply.
     ignore_groundtruths : bool, default=False
         An optional toggle to ignore label keys associated with groundtruths.
@@ -395,8 +395,8 @@ def get_label_keys(
 
 def get_joint_labels(
     db: Session,
-    lhs: schemas.Filter,
-    rhs: schemas.Filter,
+    lhs: schemas.FilterType,
+    rhs: schemas.FilterType,
 ) -> list[schemas.Label]:
     """
     Returns all unique labels that are shared between both filters.
@@ -405,9 +405,9 @@ def get_joint_labels(
     ----------
     db : Session
         The database Session to query against.
-    lhs : list[schemas.Filter]
+    lhs : list[schemas.FilterType]
         Filter defining first label set.
-    rhs : list[schemas.Filter]
+    rhs : list[schemas.FilterType]
         Filter defining second label set.
 
     Returns
@@ -422,8 +422,8 @@ def get_joint_labels(
 
 def get_joint_keys(
     db: Session,
-    lhs: schemas.Filter,
-    rhs: schemas.Filter,
+    lhs: schemas.FilterType,
+    rhs: schemas.FilterType,
 ) -> list[str]:
     """
     Returns all unique label keys that are shared between both filters.
@@ -432,9 +432,9 @@ def get_joint_keys(
     ----------
     db : Session
         The database Session to query against.
-    lhs : list[schemas.Filter]
+    lhs : list[schemas.FilterType]
         Filter defining first label set.
-    rhs : list[schemas.Filter]
+    rhs : list[schemas.FilterType]
         Filter defining second label set.
 
     Returns
@@ -449,8 +449,8 @@ def get_joint_keys(
 
 def get_disjoint_labels(
     db: Session,
-    lhs: schemas.Filter,
-    rhs: schemas.Filter,
+    lhs: schemas.FilterType,
+    rhs: schemas.FilterType,
     label_map: LabelMapType | None = None,
 ) -> tuple[list[schemas.Label], list[schemas.Label]]:
     """
@@ -460,9 +460,9 @@ def get_disjoint_labels(
     ----------
     db : Session
         The database Session to query against.
-    lhs : list[schemas.Filter]
+    lhs : list[schemas.FilterType]
         Filter defining first label set.
-    rhs : list[schemas.Filter]
+    rhs : list[schemas.FilterType]
         Filter defining second label set.
     label_map: LabelMapType, optional
         Optional mapping of individual labels to a grouper label. Useful when you need to evaluate performance using labels that differ across datasets and models.
@@ -491,8 +491,8 @@ def get_disjoint_labels(
 
 def get_disjoint_keys(
     db: Session,
-    lhs: schemas.Filter,
-    rhs: schemas.Filter,
+    lhs: schemas.FilterType,
+    rhs: schemas.FilterType,
     label_map: LabelMapType | None = None,
 ) -> tuple[list[str], list[str]]:
     """
@@ -502,9 +502,9 @@ def get_disjoint_keys(
     ----------
     db : Session
         The database Session to query against.
-    lhs : list[schemas.Filter]
+    lhs : list[schemas.FilterType]
         Filter defining first label set.
-    rhs : list[schemas.Filter]
+    rhs : list[schemas.FilterType]
         Filter defining second label set.
     label_map: LabelMapType, optional,
 
@@ -532,7 +532,7 @@ def get_disjoint_keys(
 
 def fetch_labels(
     db: Session,
-    filter_: schemas.Filter,
+    filter_: schemas.FilterType,
     ignore_groundtruths: bool = False,
     ignore_predictions: bool = False,
 ) -> set[models.Label]:
@@ -543,7 +543,7 @@ def fetch_labels(
     ----------
     db : Session
         SQLAlchemy ORM session.
-    filter_ : schemas.Filter
+    filter_ : schemas.FilterType
         Filter to constrain results by.
 
     Returns
@@ -561,8 +561,8 @@ def fetch_labels(
 
 def fetch_union_of_labels(
     db: Session,
-    lhs: schemas.Filter,
-    rhs: schemas.Filter,
+    lhs: schemas.FilterType,
+    rhs: schemas.FilterType,
 ) -> list[models.Label]:
     """
     Returns a list of unique models.Label that are shared between both filters.
@@ -571,9 +571,9 @@ def fetch_union_of_labels(
     ----------
     db : Session
         The database Session to query against.
-    lhs : list[schemas.Filter]
+    lhs : list[schemas.FilterType]
         Filter defining first label set.
-    rhs : list[schemas.Filter]
+    rhs : list[schemas.FilterType]
         Filter defining second label set.
 
     Returns

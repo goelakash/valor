@@ -18,7 +18,7 @@ from valor_api.backend.query import Query
 from valor_api.schemas.metrics import IOUMetric, mIOUMetric
 
 
-def _generate_groundtruth_query(groundtruth_filter: schemas.Filter) -> Select:
+def _generate_groundtruth_query(groundtruth_filter: schemas.FilterType) -> Select:
     """Generate a sqlalchemy query to fetch a ground truth."""
     return (
         Query(
@@ -30,7 +30,7 @@ def _generate_groundtruth_query(groundtruth_filter: schemas.Filter) -> Select:
     )  # type: ignore - SQLAlchemy type issue
 
 
-def _generate_prediction_query(prediction_filter: schemas.Filter) -> Select:
+def _generate_prediction_query(prediction_filter: schemas.FilterType) -> Select:
     """Generate a sqlalchemy query to fetch a prediction."""
 
     return (
@@ -117,8 +117,8 @@ def _count_predictions(
 
 def _compute_iou(
     db: Session,
-    groundtruth_filter: schemas.Filter,
-    prediction_filter: schemas.Filter,
+    groundtruth_filter: schemas.FilterType,
+    prediction_filter: schemas.FilterType,
 ) -> float | None:
     """Computes the pixelwise intersection over union for the given dataset, model, and label"""
 
@@ -144,8 +144,8 @@ def _compute_iou(
 def _compute_segmentation_metrics(
     db: Session,
     parameters: schemas.EvaluationParameters,
-    prediction_filter: schemas.Filter,
-    groundtruth_filter: schemas.Filter,
+    prediction_filter: schemas.FilterType,
+    groundtruth_filter: schemas.FilterType,
 ) -> list[IOUMetric | mIOUMetric]:
     """
     Computes segmentation metrics.
@@ -156,9 +156,9 @@ def _compute_segmentation_metrics(
         The database Session to query against.
     parameters : schemas.EvaluationParameters
         Any user-defined parameters.
-    prediction_filter : schemas.Filter
+    prediction_filter : schemas.FilterType
         The filter to be used to query predictions.
-    groundtruth_filter : schemas.Filter
+    groundtruth_filter : schemas.FilterType
         The filter to be used to query groundtruths.
 
     Returns
@@ -248,7 +248,7 @@ def compute_semantic_segmentation_metrics(
     evaluation = core.fetch_evaluation_from_id(db, evaluation_id)
 
     # unpack filters and params
-    groundtruth_filter = schemas.Filter(**evaluation.datum_filter)
+    groundtruth_filter = schemas.FilterType(**evaluation.datum_filter)
     prediction_filter = groundtruth_filter.model_copy()
     prediction_filter.model_names = [evaluation.model_name]
     parameters = schemas.EvaluationParameters(**evaluation.parameters)

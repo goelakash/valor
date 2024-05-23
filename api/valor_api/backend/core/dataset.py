@@ -118,7 +118,7 @@ def get_dataset(
 
 def get_paginated_datasets(
     db: Session,
-    filters: schemas.Filter | None = None,
+    filters: schemas.FilterType | None = None,
     offset: int = 0,
     limit: int = -1,
 ) -> tuple[list[schemas.Dataset], dict[str, str]]:
@@ -129,7 +129,7 @@ def get_paginated_datasets(
     ----------
     db : Session
         The database Session to query against.
-    filters : schemas.Filter, optional
+    filters : schemas.FilterType, optional
         Optional filter to constrain against.
     offset : int, optional
         The start index of the items to return.
@@ -384,7 +384,7 @@ def get_unique_groundtruth_annotation_metadata_in_dataset(
 def get_dataset_summary(db: Session, name: str) -> schemas.DatasetSummary:
     gt_labels = core.get_labels(
         db,
-        schemas.Filter(dataset_names=[name]),
+        schemas.FilterType(dataset_names=[name]),
         ignore_predictions=True,
     )
     return schemas.DatasetSummary(

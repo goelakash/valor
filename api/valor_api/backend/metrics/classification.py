@@ -50,9 +50,9 @@ def _compute_curves(
     ----------
     db: Session
         The database Session to query against.
-    prediction_filter: schemas.Filter
+    prediction_filter: schemas.FilterType
         The filter to be used to query predictions.
-    groundtruth_filter: schemas.Filter
+    groundtruth_filter: schemas.FilterType
         The filter to be used to query groundtruths.
     grouper_key: str
         The key of the grouper used to calculate the PR curves.
@@ -233,8 +233,8 @@ def _compute_curves(
 
 def _compute_binary_roc_auc(
     db: Session,
-    prediction_filter: schemas.Filter,
-    groundtruth_filter: schemas.Filter,
+    prediction_filter: schemas.FilterType,
+    groundtruth_filter: schemas.FilterType,
     label: schemas.Label,
 ) -> float:
     """
@@ -244,9 +244,9 @@ def _compute_binary_roc_auc(
     ----------
     db : Session
         The database Session to query against.
-    prediction_filter : schemas.Filter
+    prediction_filter : schemas.FilterType
         The filter to be used to query predictions.
-    groundtruth_filter : schemas.Filter
+    groundtruth_filter : schemas.FilterType
         The filter to be used to query groundtruths.
     label : schemas.Label
         The label to compute the score for.
@@ -364,8 +364,8 @@ def _compute_binary_roc_auc(
 
 def _compute_roc_auc(
     db: Session,
-    prediction_filter: schemas.Filter,
-    groundtruth_filter: schemas.Filter,
+    prediction_filter: schemas.FilterType,
+    groundtruth_filter: schemas.FilterType,
     grouper_key: str,
     grouper_mappings: dict[str, dict[str, dict]],
 ) -> float | None:
@@ -378,9 +378,9 @@ def _compute_roc_auc(
     ----------
     db : Session
         The database Session to query against.
-    prediction_filter : schemas.Filter
+    prediction_filter : schemas.FilterType
         The filter to be used to query predictions.
-    groundtruth_filter : schemas.Filter
+    groundtruth_filter : schemas.FilterType
         The filter to be used to query groundtruths.
     grouper_key : str
         The key of the grouper to calculate the ROCAUC for.
@@ -445,9 +445,9 @@ def _compute_confusion_matrix_at_grouper_key(
     ----------
     db : Session
         The database Session to query against.
-    prediction_filter : schemas.Filter
+    prediction_filter : schemas.FilterType
         The filter to be used to query predictions.
-    groundtruth_filter : schemas.Filter
+    groundtruth_filter : schemas.FilterType
         The filter to be used to query groundtruths.
     grouper_key: str
         The key of the grouper used to calculate the confusion matrix.
@@ -623,8 +623,8 @@ def _compute_precision_and_recall_f1_from_confusion_matrix(
 
 def _compute_confusion_matrix_and_metrics_at_grouper_key(
     db: Session,
-    prediction_filter: schemas.Filter,
-    groundtruth_filter: schemas.Filter,
+    prediction_filter: schemas.FilterType,
+    groundtruth_filter: schemas.FilterType,
     grouper_key: str,
     grouper_mappings: dict[str, dict[str, dict]],
     compute_pr_curves: bool,
@@ -648,9 +648,9 @@ def _compute_confusion_matrix_and_metrics_at_grouper_key(
     ----------
     db : Session
         The database Session to query against.
-    prediction_filter : schemas.Filter
+    prediction_filter : schemas.FilterType
         The filter to be used to query predictions.
-    groundtruth_filter : schemas.Filter
+    groundtruth_filter : schemas.FilterType
         The filter to be used to query groundtruths.
     grouper_mappings: dict[str, dict[str, dict]]
         A dictionary of mappings that connect groupers to their related labels.
@@ -671,11 +671,11 @@ def _compute_confusion_matrix_and_metrics_at_grouper_key(
     )
 
     # get groundtruths and predictions that conform to filters
-    gFilter = groundtruth_filter.model_copy()
-    gFilter.label_keys = label_key_filter
+    gFilterType = groundtruth_filter.model_copy()
+    gFilterType.label_keys = label_key_filter
 
-    pFilter = prediction_filter.model_copy()
-    pFilter.label_keys = label_key_filter
+    pFilterType = prediction_filter.model_copy()
+    pFilterType.label_keys = label_key_filter
 
     groundtruths = (
         Query(
@@ -683,7 +683,7 @@ def _compute_confusion_matrix_and_metrics_at_grouper_key(
             models.Annotation.datum_id.label("datum_id"),
             models.Dataset.name.label("dataset_name"),
         )
-        .filter(gFilter)
+        .filter(gFilterType)
         .groundtruths(as_subquery=False)
         .alias()
     )
@@ -694,7 +694,7 @@ def _compute_confusion_matrix_and_metrics_at_grouper_key(
             models.Annotation.datum_id.label("datum_id"),
             models.Dataset.name.label("dataset_name"),
         )
-        .filter(pFilter)
+        .filter(pFilterType)
         .predictions(as_subquery=False)
         .alias()
     )
@@ -793,8 +793,8 @@ def _compute_confusion_matrix_and_metrics_at_grouper_key(
 
 def _compute_clf_metrics(
     db: Session,
-    prediction_filter: schemas.Filter,
-    groundtruth_filter: schemas.Filter,
+    prediction_filter: schemas.FilterType,
+    groundtruth_filter: schemas.FilterType,
     compute_pr_curves: bool,
     label_map: LabelMapType | None = None,
 ) -> tuple[
@@ -815,9 +815,9 @@ def _compute_clf_metrics(
     ----------
     db : Session
         The database Session to query against.
-    prediction_filter : schemas.Filter
+    prediction_filter : schemas.FilterType
         The filter to be used to query predictions.
-    groundtruth_filter : schemas.Filter
+    groundtruth_filter : schemas.FilterType
         The filter to be used to query groundtruths.
     compute_pr_curves: bool
         A boolean which determines whether we calculate precision-recall curves or not.
@@ -888,7 +888,7 @@ def compute_clf_metrics(
     evaluation = core.fetch_evaluation_from_id(db, evaluation_id)
 
     # unpack filters and params
-    groundtruth_filter = schemas.Filter(**evaluation.datum_filter)
+    groundtruth_filter = schemas.FilterType(**evaluation.datum_filter)
     prediction_filter = groundtruth_filter.model_copy()
     prediction_filter.model_names = [evaluation.model_name]
     parameters = schemas.EvaluationParameters(**evaluation.parameters)

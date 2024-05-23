@@ -153,7 +153,7 @@ def get_model(
 
 def get_paginated_models(
     db: Session,
-    filters: schemas.Filter | None = None,
+    filters: schemas.FilterType | None = None,
     offset: int = 0,
     limit: int = -1,
 ) -> tuple[list[schemas.Model], dict[str, str]]:
@@ -164,7 +164,7 @@ def get_paginated_models(
     ----------
     db : Session
         The database Session to query against.
-    filters : schemas.Filter, optional
+    filters : schemas.FilterType, optional
         Optional filter to constrain against.
     offset : int, optional
         The start index of the items to return.

@@ -332,8 +332,8 @@ def _calculate_ap_and_ar(
 def _compute_detection_metrics(
     db: Session,
     parameters: schemas.EvaluationParameters,
-    prediction_filter: schemas.Filter,
-    groundtruth_filter: schemas.Filter,
+    prediction_filter: schemas.FilterType,
+    groundtruth_filter: schemas.FilterType,
     target_type: enums.AnnotationType,
 ) -> Sequence[
     schemas.APMetric
@@ -353,9 +353,9 @@ def _compute_detection_metrics(
         The database Session to query against.
     parameters : schemas.EvaluationParameters
         Any user-defined parameters.
-    prediction_filter : schemas.Filter
+    prediction_filter : schemas.FilterType
         The filter to be used to query predictions.
-    groundtruth_filter : schemas.Filter
+    groundtruth_filter : schemas.FilterType
         The filter to be used to query groundtruths.
     target_type: enums.AnnotationType
         The annotation type to compute metrics for.
@@ -558,7 +558,7 @@ def _compute_detection_metrics(
         db.query(ious).order_by(-ious.c.score, -ious.c.iou, ious.c.gt_id).all()
     )
 
-    # Filter out repeated predictions
+    # FilterType out repeated predictions
     pd_set = set()
     ranking = {}
     for row in ordered_ious:
@@ -931,7 +931,7 @@ def compute_detection_metrics(*_, db: Session, evaluation_id: int):
     evaluation = core.fetch_evaluation_from_id(db, evaluation_id)
 
     # unpack filters and params
-    groundtruth_filter = schemas.Filter(**evaluation.datum_filter)
+    groundtruth_filter = schemas.FilterType(**evaluation.datum_filter)
     prediction_filter = groundtruth_filter.model_copy()
     prediction_filter.model_names = [evaluation.model_name]
     parameters = schemas.EvaluationParameters(**evaluation.parameters)

@@ -1,3 +1,17 @@
+from sqlalchemy import (
+    TIMESTAMP,
+    Boolean,
+    Float,
+    Integer,
+    and_,
+    cast,
+    func,
+    not_,
+    or_,
+    select,
+    case,
+    alias,
+)
 from sqlalchemy.sql.elements import BinaryExpression, ColumnElement
 
 from valor_api.backend.models import (
@@ -9,18 +23,11 @@ from valor_api.backend.models import (
     Model,
     Prediction,
 )
-from valor_api.backend.query.filtering import (
-    filter_by_annotation,
-    filter_by_dataset,
-    filter_by_datum,
-    filter_by_label,
-    filter_by_model,
-    filter_by_prediction,
-)
+from valor_api.backend.query.filtering import _recursive_search_logic_tree, generate_logic
 from valor_api.backend.query.mapping import map_arguments_to_tables
 from valor_api.backend.query.solvers import solve_graph
 from valor_api.backend.query.types import TableTypeAlias
-from valor_api.schemas import Filter
+from valor_api.schemas.filters import FilterType
 
 
 class Query:
@@ -53,73 +60,57 @@ class Query:
         self._selected = map_arguments_to_tables(args)
         return self
 
-    def _add_expressions(
-        self,
-        table: TableTypeAlias,
-        expressions: list[ColumnElement[bool] | BinaryExpression],
-    ) -> None:
-        if len(expressions) == 0:
-            return
-        self._filtered.add(table)
-        if table not in self._expressions:
-            self._expressions[table] = []
-        self._expressions[table].extend(expressions)
+    def filter(self, conditions: FilterType, pivot = Annotation):
+        tree, ctes = _recursive_search_logic_tree(conditions)
 
-    def filter(self, filter_: Filter | None):
-        """Parses `schemas.Filter`"""
-        if filter_ is None:
-            return self
-        if not isinstance(filter_, Filter):
-            raise TypeError(
-                "filter_ should be of type `schemas.Filter` or `None`"
+        if not ctes or not tree:
+            raise ValueError
+
+        agg = (
+            select(
+                pivot.id.label("pivot_id"),
+                *[
+                    case(
+                        (row_id == cte.c.id, 1),
+                        else_=0
+                    ).label(f"cte{idx}")
+                    for idx, (row_id, cte) in enumerate(ctes)
+                ],
             )
-        self._add_expressions(Annotation, filter_by_annotation(filter_))
-        self._add_expressions(Model, filter_by_model(filter_))
-        self._add_expressions(Label, filter_by_label(filter_))
-        self._add_expressions(Dataset, filter_by_dataset(filter_))
-        self._add_expressions(Datum, filter_by_datum(filter_))
-        self._add_expressions(Prediction, filter_by_prediction(filter_))
-        return self
-
-    def any(
-        self,
-        name: str = "generated_subquery",
-        *,
-        pivot: TableTypeAlias | None = None,
-        as_subquery: bool = True,
-    ):
-        """
-        Generates a sqlalchemy subquery. Graph is chosen automatically as best fit.
-        """
-        query, subquery = solve_graph(
-            select_args=self._args,
-            selected_tables=self._selected,
-            filter_by_tables=self._filtered,
-            expressions=self._expressions,
-            pivot_table=pivot,
+            .select_from(Annotation)
+            .join(Datum, Datum.id == Annotation.datum_id)
+            .join(Dataset, Dataset.id == Datum.dataset_id)
         )
-        if query is None:
-            raise RuntimeError("No solution found to query.")
+        for row_id, cte in ctes:
+            if row_id == Label.id:
+                gt = alias(GroundTruth)
+                agg = agg.join(gt, gt.c.annotation_id == Annotation.id)
+                agg = agg.join(cte, cte.c.id == gt.c.label_id, isouter=True)
+            else:
+                agg = agg.join(cte, cte.c.id == row_id, isouter=True)
+        agg = agg.cte()
 
-        if subquery is not None:
-            query = query.where(Datum.id.in_(subquery))
-        return query.subquery(name) if as_subquery else query
-
-    def groundtruths(
-        self, name: str = "generated_subquery", *, as_subquery: bool = True
-    ):
-        """
-        Generates a sqlalchemy subquery using a groundtruths-focused graph.
-        """
-        return self.any(name, pivot=GroundTruth, as_subquery=as_subquery)
-
-    def predictions(
-        self,
-        name: str = "generated_subquery",
-        *,
-        as_subquery: bool = True,
-    ):
-        """
-        Generates a sqlalchemy subquery using a predictions-focused graph.
-        """
-        return self.any(name, pivot=Prediction, as_subquery=as_subquery)
+        q = (
+            select(*self._args)
+            .select_from(pivot)
+        )
+        if pivot is Annotation:
+            q = q.join(Datum, Datum.id == Annotation.datum_id)
+            q = q.join(Dataset, Dataset.id == Datum.dataset_id)
+            q = q.join(GroundTruth, GroundTruth.annotation_id == Annotation.id)
+            q = q.join(Label, Label.id == GroundTruth.label_id)
+            
+        elif pivot is Datum:
+            q = q.join(Annotation, Annotation.datum_id == Datum.id)
+            q = q.join(Dataset, Dataset.id == Datum.dataset_id)
+            q = q.join(GroundTruth, GroundTruth.annotation_id == Annotation.id)
+            q = q.join(Label, Label.id == GroundTruth.label_id)
+    
+        q = q.join(agg, agg.c.pivot_id == pivot.id)
+        return q.where(generate_logic(agg, tree))
+    
+    def filter_annotations(self, conditions: FilterType):
+        return self.filter(conditions, pivot=Annotation)
+    
+    def filter_datums(self, conditions: FilterType):
+        return self.filter(conditions, pivot=Datum)

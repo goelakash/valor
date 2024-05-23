@@ -225,7 +225,7 @@ def _split_request(
         )
 
     # 1.b - get all models, note this uses the unmodified filter
-    model_filter = schemas.Filter(model_names=job_request.model_names)
+    model_filter = schemas.FilterType(model_names=job_request.model_names)
     model_to_evaluate = (
         db.query(Query(models.Model).filter(model_filter).any())  # type: ignore - SQLAlchemy type issue
         .distinct()
@@ -329,7 +329,7 @@ def _create_responses(
         if evaluation.id is None:
             raise exceptions.EvaluationDoesNotExistError()
 
-        datum_filter = schemas.Filter(**evaluation.datum_filter)
+        datum_filter = schemas.FilterType(**evaluation.datum_filter)
         model_filter = datum_filter.model_copy()
         model_filter.dataset_names = None
         model_filter.model_names = [evaluation.model_name]

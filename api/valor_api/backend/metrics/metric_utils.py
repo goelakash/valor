@@ -269,9 +269,9 @@ def log_evaluation_duration(
         The database Session to query against.
     evaluation : models.Evaluation
         The evaluation to log to.
-    prediction_filter : schemas.Filter
+    prediction_filter : schemas.FilterType
         The filter to be used to query predictions.
-    groundtruth_filter : schemas.Filter
+    groundtruth_filter : schemas.FilterType
         The filter to be used to query groundtruths.
     """
 
@@ -291,8 +291,8 @@ def log_evaluation_duration(
 def log_evaluation_item_counts(
     db: Session,
     evaluation: models.Evaluation,
-    prediction_filter: schemas.Filter,
-    groundtruth_filter: schemas.Filter,
+    prediction_filter: schemas.FilterType,
+    groundtruth_filter: schemas.FilterType,
 ):
     """
     Store analytics regarding the number of elements processed by the evaluation in the metadata field of the evaluation table.
@@ -303,9 +303,9 @@ def log_evaluation_item_counts(
         The database Session to query against.
     evaluation : models.Evaluation
         The evaluation to log to.
-    prediction_filter : schemas.Filter
+    prediction_filter : schemas.FilterType
         The filter to be used to query predictions.
-    groundtruth_filter : schemas.Filter
+    groundtruth_filter : schemas.FilterType
         The filter to be used to query groundtruths.
     """
     # get ground truth, prediction, annotation, and label counts

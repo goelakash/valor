@@ -3,7 +3,7 @@ import datetime
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from valor_api.enums import AnnotationType, EvaluationStatus, TaskType
-from valor_api.schemas.filters import Filter
+from valor_api.schemas.filters import FilterType
 from valor_api.schemas.metrics import ConfusionMatrixResponse, Metric
 from valor_api.schemas.types import Label
 
@@ -104,7 +104,7 @@ class EvaluationRequest(BaseModel):
 
     model_names: list[str]
     dataset_names: list[str]
-    datum_filter: Filter
+    datum_filter: FilterType | None
     parameters: EvaluationParameters
     meta: dict[str, str | int | float] | None
 
@@ -169,7 +169,7 @@ class EvaluationResponse(BaseModel):
 
     id: int
     model_name: str
-    datum_filter: Filter
+    datum_filter: FilterType
     parameters: EvaluationParameters
     status: EvaluationStatus
     created_at: datetime.datetime

@@ -7,7 +7,6 @@ from valor_api import api_utils, exceptions, schemas
 from valor_api.backend import models
 from valor_api.backend.query import Query
 
-
 def create_datums(
     db: Session,
     datums: list[schemas.Datum],
@@ -177,7 +176,7 @@ def fetch_datum(
 
 def get_paginated_datums(
     db: Session,
-    filters: schemas.Filter | None = None,
+    filters: schemas.FilterType | None = None,
     offset: int = 0,
     limit: int = -1,
 ) -> tuple[list[schemas.Datum], dict[str, str]]:
@@ -188,7 +187,7 @@ def get_paginated_datums(
     ----------
     db : Session
         The database Session to query against.
-    filters : schemas.Filter
+    filters : schemas.FilterType
         An optional filter to apply.
     offset : int, optional
         The start index of the items to return.

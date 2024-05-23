@@ -2,6 +2,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
+
 from valor_api.schemas.validators import (
     validate_type_bool,
     validate_type_box,
@@ -20,7 +21,12 @@ from valor_api.schemas.validators import (
     validate_type_time,
 )
 
+def validate_type_symbol(x):
+    if not isinstance(x, Symbol):
+        raise TypeError
+
 filterable_types_to_validator = {
+    "symbol": validate_type_symbol,
     "bool": validate_type_bool,
     "string": validate_type_string,
     "integer": validate_type_integer,
@@ -40,7 +46,6 @@ filterable_types_to_validator = {
     "label": None,
     "embedding": None,
     "raster": None,
-    "symbol": None,
 }
 
 
@@ -56,22 +61,22 @@ class Value(BaseModel):
     value: bool | int | float | str | Symbol | list | dict
     model_config = ConfigDict(extra="forbid")
 
-    @model_validator(mode="after")
-    def _validate_value(self):
-        self.type = self.type.lower()
-        if self.type not in filterable_types_to_validator:
-            raise TypeError(f"Value of type '{self.type}' are not supported.")
-        validator = filterable_types_to_validator[self.type]
-        if validator is None:
-            raise NotImplementedError(
-                f"A validator for type '{self.type}' has not been implemented."
-            )
-        validator(self.value)
+    # @model_validator(mode="after")
+    # def _validate_value(self):
+    #     self.type = self.type.lower()
+    #     if self.type not in filterable_types_to_validator:
+    #         raise TypeError(f"Value of type '{self.type}' are not supported.")
+    #     validator = filterable_types_to_validator[self.type]
+    #     if validator is None:
+    #         raise NotImplementedError(
+    #             f"A validator for type '{self.type}' has not been implemented."
+    #         )
+    #     validator(self.value)
 
 
 class OneArgFunc(BaseModel):
     op: str
-    arg: "Value | OneArgFunc | TwoArgFunc | NArgFunc"
+    arg: "OneArgFunc | TwoArgFunc | NArgFunc | Value"
     model_config = ConfigDict(extra="forbid")
 
     @field_validator("op")
@@ -91,8 +96,8 @@ class OneArgFunc(BaseModel):
 
 class TwoArgFunc(BaseModel):
     op: str
-    lhs: "Value | OneArgFunc | TwoArgFunc | NArgFunc"
-    rhs: "Value | OneArgFunc | TwoArgFunc | NArgFunc"
+    lhs: "OneArgFunc | TwoArgFunc | NArgFunc | Value"
+    rhs: "OneArgFunc | TwoArgFunc | NArgFunc | Value"
     model_config = ConfigDict(extra="forbid")
 
     @field_validator("op")
@@ -119,7 +124,7 @@ class TwoArgFunc(BaseModel):
 
 class NArgFunc(BaseModel):
     op: str
-    args: list["Value | OneArgFunc | TwoArgFunc | NArgFunc"]
+    args: list["OneArgFunc | TwoArgFunc | NArgFunc | Value"]
     model_config = ConfigDict(extra="forbid")
 
     @field_validator("op")
