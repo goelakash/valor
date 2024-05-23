@@ -7,9 +7,6 @@ from .evaluation import (
 from .filters import (
     Value,
     Symbol,
-    OneArgFunc,
-    TwoArgFunc,
-    NArgFunc,
     FilterType,
 )
 from .geometry import (
@@ -101,9 +98,6 @@ __all__ = [
     "EvaluationParameters",
     "Value",
     "Symbol",
-    "OneArgFunc",
-    "TwoArgFunc",
-    "NArgFunc",
     "FilterType",
     "Health",
     "Readiness",

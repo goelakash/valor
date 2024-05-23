@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import and_, func, not_
 
 from valor_api.backend import models, Query
-from valor_api.schemas.filters import Value, Symbol, OneArgFunc, TwoArgFunc, NArgFunc
+from valor_api.schemas.filters import Value, Symbol, And, Or, IsNull, Equal, Operands
 from valor_api.backend.query.filtering import (
     create_cte,
     _recursive_search_logic_tree,
@@ -13,12 +13,12 @@ from valor_api.backend.query.filtering import (
 
 def test_create_cte():
     cte = create_cte(
-        opstr="eq", 
+        opstr="equal", 
         symbol=Symbol(
             name="dataset.metadata",
             key="key1",
             attribute="area",
-            dtype="polygon",
+            type="polygon",
         ),
         value=Value(
             type="polygon",
@@ -36,64 +36,50 @@ def test_create_cte():
 
 
 def test__recursive_search_logic_tree():
-    f = NArgFunc(
-        op="and",
-        args=[
-            OneArgFunc(
-                op="isnull",
-                arg=Value(
-                    type="symbol",
-                    value=Symbol(
-                        name="annotation.polygon",
-                        dtype="polygon",
-                    )
+    f = And(
+        logical_and=[
+            IsNull(
+                isnull=Symbol(
+                    name="annotation.polygon",
+                    type="polygon",
                 )
             ),
-            TwoArgFunc(
-                op="eq",
-                lhs=Value(
-                    type="symbol",
-                    value=Symbol(
+            Equal(
+                eq=Operands(
+                    lhs=Symbol(
                         name="dataset.metadata",
                         key="some_string",
                         attribute=None,
-                        dtype="string",
+                        type="string",
                     ),
-                ),
-                rhs=Value(
-                    type="string",
-                    value="hello world",
+                    rhs=Value(
+                        type="string",
+                        value="hello world",
+                    )
                 )
             ),
-            NArgFunc(
-                op="or",
-                args=[
-                    OneArgFunc(
-                        op="isnull",
-                        arg=Value(
-                            type="symbol",
-                            value=Symbol(
-                                name="annotation.polygon",
-                                dtype="polygon",
-                            )
+            Or(
+                logical_or=[
+                    IsNull(
+                        isnull=Symbol(
+                            name="annotation.polygon",
+                            type="polygon",
                         )
                     ),
-                    TwoArgFunc(
-                        op="eq",
-                        lhs=Value(
-                            type="symbol",
-                            value=Symbol(
+                    Equal(
+                        eq=Operands(
+                            lhs=Symbol(
                                 name="dataset.metadata",
                                 key="some_string",
                                 attribute=None,
-                                dtype="string",
+                                type="string",
                             ),
-                        ),
-                        rhs=Value(
-                            type="string",
-                            value="hello world",
+                            rhs=Value(
+                                type="string",
+                                value="hello world",
+                            )
                         )
-                    )
+                    ),
                 ]
             )
         ]

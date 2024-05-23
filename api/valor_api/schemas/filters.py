@@ -49,17 +49,7 @@ filterable_types_to_validator = {
 }
 
 
-class Symbol(BaseModel):
-    name: str
-    key: str | None = None
-    attribute: str | None = None
-    dtype: str
 
-
-class Value(BaseModel):
-    type: str
-    value: bool | int | float | str | Symbol | list | dict
-    model_config = ConfigDict(extra="forbid")
 
     # @model_validator(mode="after")
     # def _validate_value(self):
@@ -74,72 +64,338 @@ class Value(BaseModel):
     #     validator(self.value)
 
 
-class OneArgFunc(BaseModel):
-    op: str
-    arg: "OneArgFunc | TwoArgFunc | NArgFunc | Value"
+# class OneArgFunc(BaseModel):
+#     op: str
+#     arg: "OneArgFunc | TwoArgFunc | NArgFunc | Value"
+#     model_config = ConfigDict(extra="forbid")
+
+#     @field_validator("op")
+#     @classmethod
+#     def _validate_operator(cls, op: str) -> str:
+#         """Validate the operator."""
+#         valid_functions = {
+#             "not",
+#             "isnull",
+#             "isnotnull",
+#         }
+#         op = op.lower()
+#         if op not in valid_functions:
+#             raise NotImplementedError(f"Operator '{op}' is not supported.")
+#         return op
+
+
+# class TwoArgFunc(BaseModel):
+#     op: str
+#     lhs: "OneArgFunc | TwoArgFunc | NArgFunc | Value"
+#     rhs: "OneArgFunc | TwoArgFunc | NArgFunc | Value"
+#     model_config = ConfigDict(extra="forbid")
+
+#     @field_validator("op")
+#     @classmethod
+#     def _validate_operator(cls, op: str) -> str:
+#         """Validate the operator."""
+#         valid_functions = {
+#             "eq",
+#             "ne",
+#             "gt",
+#             "ge",
+#             "lt",
+#             "le",
+#             "intersects",
+#             "inside",
+#             "outside",
+#             "contains",
+#         }
+#         op = op.lower()
+#         if op not in valid_functions:
+#             raise NotImplementedError(f"Operator '{op}' is not supported.")
+#         return op
+
+
+# class NArgFunc(BaseModel):
+#     op: str
+#     args: list["OneArgFunc | TwoArgFunc | NArgFunc | Value"]
+#     model_config = ConfigDict(extra="forbid")
+
+#     @field_validator("op")
+#     @classmethod
+#     def _validate_operator(cls, op: str) -> str:
+#         """Validate the operator."""
+#         valid_functions = {
+#             "and",
+#             "or",
+#             "xor",
+#         }
+#         op = op.lower()
+#         if op not in valid_functions:
+#             raise NotImplementedError(f"Operator '{op}' is not supported.")
+#         return op
+
+
+class Symbol(BaseModel):
+    name: str
+    key: str | None = None
+    attribute: str | None = None
+    type: str | None = None
+
+
+class Value(BaseModel):
+    type: str
+    value: bool | int | float | str | list | dict
     model_config = ConfigDict(extra="forbid")
 
-    @field_validator("op")
-    @classmethod
-    def _validate_operator(cls, op: str) -> str:
-        """Validate the operator."""
-        valid_functions = {
-            "not",
-            "isnull",
-            "isnotnull",
-        }
-        op = op.lower()
-        if op not in valid_functions:
-            raise NotImplementedError(f"Operator '{op}' is not supported.")
-        return op
 
-
-class TwoArgFunc(BaseModel):
-    op: str
-    lhs: "OneArgFunc | TwoArgFunc | NArgFunc | Value"
-    rhs: "OneArgFunc | TwoArgFunc | NArgFunc | Value"
+class Operands(BaseModel):
+    lhs: Symbol
+    rhs: Value
     model_config = ConfigDict(extra="forbid")
 
-    @field_validator("op")
-    @classmethod
-    def _validate_operator(cls, op: str) -> str:
-        """Validate the operator."""
-        valid_functions = {
-            "eq",
-            "ne",
-            "gt",
-            "ge",
-            "lt",
-            "le",
-            "intersects",
-            "inside",
-            "outside",
-            "contains",
-        }
-        op = op.lower()
-        if op not in valid_functions:
-            raise NotImplementedError(f"Operator '{op}' is not supported.")
-        return op
 
-
-class NArgFunc(BaseModel):
-    op: str
-    args: list["OneArgFunc | TwoArgFunc | NArgFunc | Value"]
+class And(BaseModel):
+    logical_and: list["FilterType"]
     model_config = ConfigDict(extra="forbid")
 
-    @field_validator("op")
-    @classmethod
-    def _validate_operator(cls, op: str) -> str:
-        """Validate the operator."""
-        valid_functions = {
-            "and",
-            "or",
-            "xor",
-        }
-        op = op.lower()
-        if op not in valid_functions:
-            raise NotImplementedError(f"Operator '{op}' is not supported.")
-        return op
+    @property
+    def op(self) -> str:
+        return type(self).__name__.lower()
+
+    @property
+    def args(self):
+        return self.logical_and
 
 
-FilterType = OneArgFunc | TwoArgFunc | NArgFunc
+class Or(BaseModel):
+    logical_or: list["FilterType"]
+    model_config = ConfigDict(extra="forbid")
+
+    @property
+    def op(self) -> str:
+        return type(self).__name__.lower()
+
+    @property
+    def args(self):
+        return self.logical_or
+
+
+class Not(BaseModel):
+    logical_not: "FilterType"
+    model_config = ConfigDict(extra="forbid")
+
+    @property
+    def op(self) -> str:
+        return type(self).__name__.lower()
+
+    @property
+    def arg(self):
+        return self.logical_not
+
+
+class IsNull(BaseModel):
+    isnull: Symbol
+    model_config = ConfigDict(extra="forbid")
+
+    @property
+    def op(self) -> str:
+        return type(self).__name__.lower()
+
+    @property
+    def arg(self):
+        return self.isnull
+
+
+class IsNotNull(BaseModel):
+    isnotnull: Symbol
+    model_config = ConfigDict(extra="forbid")
+
+    @property
+    def op(self) -> str:
+        return type(self).__name__.lower()
+
+    @property
+    def arg(self):
+        return self.isnotnull
+
+
+class Equal(BaseModel):
+    eq: Operands
+    model_config = ConfigDict(extra="forbid")
+
+    @property
+    def op(self) -> str:
+        return type(self).__name__.lower()
+
+    @property
+    def lhs(self):
+        return self.eq.lhs
+
+    @property
+    def rhs(self):
+        return self.eq.rhs
+
+
+class NotEqual(BaseModel):
+    ne: Operands
+    model_config = ConfigDict(extra="forbid")
+
+    @property
+    def op(self) -> str:
+        return type(self).__name__.lower()
+
+    @property
+    def lhs(self):
+        return self.ne.lhs
+
+    @property
+    def rhs(self):
+        return self.ne.rhs
+
+
+class GreaterThan(BaseModel):
+    gt: Operands
+    model_config = ConfigDict(extra="forbid")
+
+    @property
+    def op(self) -> str:
+        return type(self).__name__.lower()
+
+    @property
+    def lhs(self):
+        return self.gt.lhs
+
+    @property
+    def rhs(self):
+        return self.gt.rhs
+
+
+class GreaterThanEqual(BaseModel):
+    ge: Operands
+    model_config = ConfigDict(extra="forbid")
+
+    @property
+    def op(self) -> str:
+        return type(self).__name__.lower()
+
+    @property
+    def lhs(self):
+        return self.ge.lhs
+
+    @property
+    def rhs(self):
+        return self.ge.rhs
+
+
+class LessThan(BaseModel):
+    lt: Operands
+    model_config = ConfigDict(extra="forbid")
+
+    @property
+    def op(self) -> str:
+        return type(self).__name__.lower()
+
+    @property
+    def lhs(self):
+        return self.lt.lhs
+
+    @property
+    def rhs(self):
+        return self.lt.rhs
+
+
+class Intersects(BaseModel):
+    intersects: Operands
+    model_config = ConfigDict(extra="forbid")
+
+    @property
+    def op(self) -> str:
+        return type(self).__name__.lower()
+
+    @property
+    def lhs(self):
+        return self.intersects.lhs
+
+    @property
+    def rhs(self):
+        return self.intersects.rhs
+
+
+class Inside(BaseModel):
+    inside: Operands
+    model_config = ConfigDict(extra="forbid")
+
+    @property
+    def op(self) -> str:
+        return type(self).__name__.lower()
+
+    @property
+    def lhs(self):
+        return self.inside.lhs
+
+    @property
+    def rhs(self):
+        return self.inside.rhs
+
+
+class Outside(BaseModel):
+    outside: Operands
+    model_config = ConfigDict(extra="forbid")
+
+    @property
+    def op(self) -> str:
+        return type(self).__name__.lower()
+
+    @property
+    def lhs(self):
+        return self.outside.lhs
+
+    @property
+    def rhs(self):
+        return self.outside.rhs
+
+
+class Contains(BaseModel):
+    contains: Operands
+    model_config = ConfigDict(extra="forbid")
+
+    @property
+    def op(self) -> str:
+        return type(self).__name__.lower()
+
+    @property
+    def lhs(self):
+        return self.contains.lhs
+
+    @property
+    def rhs(self):
+        return self.contains.rhs
+
+
+LogicalType = And | Or | Not
+FunctionType = (
+    IsNull
+    | IsNotNull
+    | Equal
+    | NotEqual
+    | GreaterThan
+    | GreaterThanEqual
+    | LessThan
+    | Intersects
+    | Inside
+    | Outside
+    | Contains
+)
+FilterType = LogicalType | FunctionType
+
+
+NArgFunction = And | Or
+OneArgFunction = Not | IsNull | IsNotNull
+TwoArgFunction = (
+    Equal
+    | NotEqual
+    | GreaterThan
+    | GreaterThanEqual
+    | LessThan
+    | Intersects
+    | Inside
+    | Outside
+    | Contains
+)

@@ -33,11 +33,12 @@ from valor_api.backend.models import (
 from valor_api.backend.query.types import TableTypeAlias
 from valor_api.schemas import Duration, Time
 from valor_api.schemas.filters import (
-    NArgFunc,
-    OneArgFunc,
     Symbol,
-    TwoArgFunc,
     Value,
+    And,
+    NArgFunction,
+    OneArgFunction,
+    TwoArgFunction,
     FilterType,
 )
 from valor_api.schemas.geometry import (
@@ -60,12 +61,12 @@ category_to_supported_operations = {
 
 
 opstr_to_operator = {
-    "eq": operator.eq,
-    "ne": operator.ne,
-    "gt": operator.gt,
-    "ge": operator.ge,
-    "lt": operator.lt,
-    "le": operator.le,
+    "equal": operator.eq,
+    "notequal": operator.ne,
+    "greaterthan": operator.gt,
+    "greaterthanequal": operator.ge,
+    "lessthan": operator.lt,
+    "lessthanequal": operator.le,
     "intersect": lambda lhs, rhs: func.ST_Intersects(lhs, rhs),
     "inside": lambda lhs, rhs: func.ST_Covers(rhs, lhs),
     "outside": lambda lhs, rhs: not_(func.ST_Covers(rhs, lhs)),
@@ -199,7 +200,7 @@ def create_cte(opstr: str, symbol: Symbol, value: Value | None = None):
         raise ValueError
     elif not isinstance(value, Value) and value is not None:
         raise ValueError
-    elif value and symbol.dtype != value.type:
+    elif value and symbol.type != value.type:
         raise ValueError
         
     op = opstr_to_operator[opstr]
@@ -208,7 +209,7 @@ def create_cte(opstr: str, symbol: Symbol, value: Value | None = None):
 
     if symbol.key:
         lhs = lhs[symbol.key]  # add keying
-        lhs = metadata_symbol_type_casting[symbol.dtype](lhs)  # add type cast
+        lhs = metadata_symbol_type_casting[symbol.type](lhs)  # add type cast
 
     if symbol.attribute:
         modifier = symbol_supports_attribute[symbol.attribute][symbol.name]
@@ -218,51 +219,30 @@ def create_cte(opstr: str, symbol: Symbol, value: Value | None = None):
     return (row_id, select(row_id).where(op(lhs, rhs)).cte())
 
 
-def _recursive_search_logic_tree(func: OneArgFunc | TwoArgFunc | NArgFunc, cte_list: list | None = None):
+def _recursive_search_logic_tree(func: OneArgFunction | TwoArgFunction | NArgFunction, cte_list: list | None = None):
 
-    if not isinstance(func, OneArgFunc | TwoArgFunc | NArgFunc):
+    if not isinstance(func, OneArgFunction | TwoArgFunction | NArgFunction):
         raise ValueError
     if cte_list is None:
         cte_list = list()
     logical_tree = dict()
     
-    if isinstance(func, OneArgFunc):
-        if isinstance(func.arg, Value):
-            if not isinstance(func.arg.value, Symbol):
-                raise ValueError  # one arg functions that are not symbolic dont make sense as filters
-            cte_list.append(create_cte(opstr=func.op, symbol=func.arg.value))
+    if isinstance(func, OneArgFunction):
+        if isinstance(func.arg, Symbol):
+            cte_list.append(create_cte(opstr=func.op, symbol=func.arg))
             return (len(cte_list)-1, cte_list)
         else:
             branch, cte_list = _recursive_search_logic_tree(func.arg, cte_list)
             logical_tree[func.op] = branch
             return (logical_tree, cte_list)
 
-    elif isinstance(func, TwoArgFunc):
-        if isinstance(func.lhs, Value) and isinstance(func.rhs, Value):
-            if not isinstance(func.lhs.value, Symbol):
-                raise ValueError
-            if isinstance(func.rhs.value, Symbol):
-                raise ValueError
-            lhs = func.lhs.value
-            rhs = func.rhs
-            cte_list.append(create_cte(opstr=func.op, symbol=lhs, value=rhs))
-            return (len(cte_list)-1, cte_list)
-        elif not isinstance(func.lhs, Value) and not isinstance(func.rhs, Value):
-            lhs_branch, cte_list = _recursive_search_logic_tree(func.lhs, cte_list)
-            rhs_branch, cte_list = _recursive_search_logic_tree(func.rhs, cte_list)
-            logical_tree[func.op] = {
-                "lhs": lhs_branch,
-                "rhs": rhs_branch,
-            }
-            return (logical_tree, cte_list)
-        else:
-            raise ValueError
+    elif isinstance(func, TwoArgFunction):
+        cte_list.append(create_cte(opstr=func.op, symbol=func.lhs, value=func.rhs))
+        return (len(cte_list)-1, cte_list)
     
-    elif isinstance(func, NArgFunc):
+    elif isinstance(func, NArgFunction):
         branches = list()
         for arg in func.args:
-            if isinstance(arg, Value):
-                raise ValueError # should only contain expressions
             branch, cte_list = _recursive_search_logic_tree(arg, cte_list)
             branches.append(branch)
         logical_tree[func.op] = branches
