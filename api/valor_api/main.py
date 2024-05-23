@@ -228,7 +228,7 @@ def get_prediction(
 """ LABELS """
 
 
-@app.get(
+@app.post(
     "/labels",
     status_code=200,
     dependencies=[Depends(token_auth_scheme)],
@@ -237,7 +237,7 @@ def get_prediction(
 )
 def get_labels(
     response: Response,
-    filters: schemas.FilterQueryParams = Depends(),
+    filters: schemas.FilterType | None = None,
     offset: int = 0,
     limit: int = -1,
     db: Session = Depends(get_db),
@@ -251,7 +251,7 @@ def get_labels(
     ----------
     response: Response
         The FastAPI response object. Used to return a content-range header to the user.
-    filters : schemas.FilterQueryParams, optional
+    filters : schemas.FilterType, optional
         An optional filter to constrain results by.
     db : Session
         The database session to use. This parameter is a sqlalchemy dependency and shouldn't be submitted by the user.
@@ -268,7 +268,7 @@ def get_labels(
     try:
         content, headers = crud.get_labels(
             db=db,
-            filters=schemas.convert_filter_query_params_to_filter_obj(filters),
+            filters=filters,
             offset=offset,
             limit=limit,
         )
@@ -317,12 +317,24 @@ def get_labels_from_dataset(
     HTTPException (404)
         If the dataset doesn't exist.
     """
+    filter_ = {
+        "eq": {
+            "lhs": {
+                "type": "string",
+                "name": "dataset.name",
+            },
+            "rhs": {
+                "type": "string",
+                "value": dataset_name,
+            },
+        }
+    }
     try:
+        from valor_api.schemas.filters import Equal
+
         content, headers = crud.get_labels(
             db=db,
-            filters=schemas.Filter(
-                dataset_names=[dataset_name],
-            ),
+            filters=Equal(**filter_),  # type: ignore - valid usage of pydantic
             ignore_prediction_labels=True,
             offset=offset,
             limit=limit,
@@ -375,12 +387,25 @@ def get_labels_from_model(
     HTTPException (404)
         If the model doesn't exist.
     """
+
+    filter_ = {
+        "eq": {
+            "lhs": {
+                "type": "string",
+                "name": "model.name",
+            },
+            "rhs": {
+                "type": "string",
+                "value": model_name,
+            },
+        }
+    }
     try:
+        from valor_api.schemas.filters import Equal
+
         content, headers = crud.get_labels(
             db=db,
-            filters=schemas.Filter(
-                model_names=[model_name],
-            ),
+            filters=Equal(**filter_),  # type: ignore - valid usage of pydantic
             ignore_groundtruth_labels=True,
             offset=offset,
             limit=limit,
@@ -434,7 +459,7 @@ def create_dataset(dataset: schemas.Dataset, db: Session = Depends(get_db)):
 )
 def get_datasets(
     response: Response,
-    filters: schemas.FilterQueryParams = Depends(),
+    filters: schemas.FilterType | None = None,
     offset: int = 0,
     limit: int = -1,
     db: Session = Depends(get_db),
@@ -448,7 +473,7 @@ def get_datasets(
     ----------
     response: Response
         The FastAPI response object. Used to return a content-range header to the user.
-    filters : schemas.FilterQueryParams, optional
+    filters : schemas.FilterType, optional
         An optional filter to constrain results by. All fields should be specified as strings in a JSON.
     offset : int, optional
         The start index of the items to return.
@@ -465,7 +490,7 @@ def get_datasets(
     try:
         content, headers = crud.get_datasets(
             db=db,
-            filters=schemas.convert_filter_query_params_to_filter_obj(filters),
+            filters=filters,
             offset=offset,
             limit=limit,
         )
@@ -659,7 +684,7 @@ def delete_dataset(
 """ DATUMS """
 
 
-@app.get(
+@app.post(
     "/data",
     status_code=200,
     dependencies=[Depends(token_auth_scheme)],
@@ -668,7 +693,7 @@ def delete_dataset(
 )
 def get_datums(
     response: Response,
-    filters: schemas.FilterQueryParams = Depends(),
+    filters: schemas.FilterType | None = None,
     offset: int = 0,
     limit: int = -1,
     db: Session = Depends(get_db),
@@ -682,7 +707,7 @@ def get_datums(
     ----------
     response: Response
         The FastAPI response object. Used to return a content-range header to the user.
-    filters : schemas.FilterQueryParams, optional
+    filters : schemas.FilterType, optional
         An optional filter to constrain results by.
     offset : int, optional
         The start index of the items to return.
@@ -704,7 +729,7 @@ def get_datums(
     try:
         content, headers = crud.get_datums(
             db=db,
-            filters=schemas.convert_filter_query_params_to_filter_obj(filters),
+            filters=filters,
             offset=offset,
             limit=limit,
         )
@@ -743,13 +768,40 @@ def get_datum(
     HTTPException (404)
         If the dataset or datum doesn't exist.
     """
+    filter_ = {
+        "logical_and": [
+            {
+                "eq": {
+                    "lhs": {
+                        "type": "string",
+                        "name": "dataset.name",
+                    },
+                    "rhs": {
+                        "type": "string",
+                        "value": dataset_name,
+                    },
+                },
+            },
+            {
+                "eq": {
+                    "lhs": {
+                        "type": "string",
+                        "name": "datum.uid",
+                    },
+                    "rhs": {
+                        "type": "string",
+                        "value": uid,
+                    },
+                },
+            },
+        ]
+    }
     try:
+        from valor_api.schemas.filters import And
+
         datums, _ = crud.get_datums(
             db=db,
-            filters=schemas.Filter(
-                dataset_names=[dataset_name],
-                datum_uids=[uid],
-            ),
+            filters=And(**filter_),  # type: ignore - valid usage of pydantic
         )
 
         if len(datums) == 0:
@@ -805,7 +857,7 @@ def create_model(model: schemas.Model, db: Session = Depends(get_db)):
 )
 def get_models(
     response: Response,
-    filters: schemas.FilterQueryParams = Depends(),
+    filters: schemas.FilterType | None = None,
     offset: int = 0,
     limit: int = -1,
     db: Session = Depends(get_db),
@@ -819,7 +871,7 @@ def get_models(
     ----------
     response: Response
         The FastAPI response object. Used to return a content-range header to the user.
-    filters : schemas.FilterQueryParams, optional
+    filters : schemas.FilterType, optional
         An optional filter to constrain results by.
     offset : int, optional
         The start index of the items to return.
@@ -835,7 +887,7 @@ def get_models(
     """
     content, headers = crud.get_models(
         db=db,
-        filters=schemas.convert_filter_query_params_to_filter_obj(filters),
+        filters=filters,
         offset=offset,
         limit=limit,
     )

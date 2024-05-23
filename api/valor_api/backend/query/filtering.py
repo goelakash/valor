@@ -7,14 +7,14 @@ from sqlalchemy import (
     Boolean,
     Float,
     Integer,
+    alias,
     and_,
+    case,
     cast,
     func,
     not_,
     or_,
     select,
-    case,
-    alias,
 )
 from sqlalchemy.dialects.postgresql import INTERVAL, TEXT
 from sqlalchemy.sql.elements import BinaryExpression, ColumnElement
@@ -25,32 +25,31 @@ from valor_api.backend.models import (
     Dataset,
     Datum,
     Embedding,
+    GroundTruth,
     Label,
     Model,
     Prediction,
-    GroundTruth,
 )
 from valor_api.backend.query.types import TableTypeAlias
 from valor_api.schemas import Duration, Time
 from valor_api.schemas.filters import (
-    Symbol,
-    Value,
     And,
+    FilterType,
     NArgFunction,
     OneArgFunction,
+    Symbol,
     TwoArgFunction,
-    FilterType,
+    Value,
 )
 from valor_api.schemas.geometry import (
-    Point,
-    MultiPoint,
+    Box,
     LineString,
     MultiLineString,
-    Polygon,
-    Box,
+    MultiPoint,
     MultiPolygon,
+    Point,
+    Polygon,
 )
-
 
 category_to_supported_operations = {
     "nullable": {"isnull", "isnotnull"},
@@ -187,14 +186,18 @@ value_dtype_to_casting = {
     "point": lambda x: ST_GeomFromGeoJSON(Point(value=x).to_dict()),
     "multipoint": lambda x: ST_GeomFromGeoJSON(MultiPoint(value=x).to_dict()),
     "linestring": lambda x: ST_GeomFromGeoJSON(LineString(value=x).to_dict()),
-    "multilinestring": lambda x: ST_GeomFromGeoJSON(MultiLineString(value=x).to_dict()),
+    "multilinestring": lambda x: ST_GeomFromGeoJSON(
+        MultiLineString(value=x).to_dict()
+    ),
     "polygon": lambda x: ST_GeomFromGeoJSON(Polygon(value=x).to_dict()),
     "box": lambda x: ST_GeomFromGeoJSON(Box(value=x).to_dict()),
-    "multipolygon": lambda x: ST_GeomFromGeoJSON(MultiPolygon(value=x).to_dict()),
+    "multipolygon": lambda x: ST_GeomFromGeoJSON(
+        MultiPolygon(value=x).to_dict()
+    ),
 }
 
 
-# @TODO - Need to implement safeguards
+# @TODO - Need to implement exceptions
 def create_cte(opstr: str, symbol: Symbol, value: Value | None = None):
     if not isinstance(symbol, Symbol):
         raise ValueError
@@ -202,7 +205,7 @@ def create_cte(opstr: str, symbol: Symbol, value: Value | None = None):
         raise ValueError
     elif value and symbol.type != value.type:
         raise ValueError
-        
+
     op = opstr_to_operator[opstr]
     row_id, lhs = symbol_name_to_row_id_value[symbol.name]
     rhs = value_dtype_to_casting[value.type](value.value) if value else None
@@ -219,27 +222,33 @@ def create_cte(opstr: str, symbol: Symbol, value: Value | None = None):
     return (row_id, select(row_id).where(op(lhs, rhs)).cte())
 
 
-def _recursive_search_logic_tree(func: OneArgFunction | TwoArgFunction | NArgFunction, cte_list: list | None = None):
+# @TODO - Need to implement exceptions
+def _recursive_search_logic_tree(
+    func: OneArgFunction | TwoArgFunction | NArgFunction,
+    cte_list: list | None = None,
+):
 
     if not isinstance(func, OneArgFunction | TwoArgFunction | NArgFunction):
         raise ValueError
     if cte_list is None:
         cte_list = list()
     logical_tree = dict()
-    
+
     if isinstance(func, OneArgFunction):
         if isinstance(func.arg, Symbol):
             cte_list.append(create_cte(opstr=func.op, symbol=func.arg))
-            return (len(cte_list)-1, cte_list)
+            return (len(cte_list) - 1, cte_list)
         else:
             branch, cte_list = _recursive_search_logic_tree(func.arg, cte_list)
             logical_tree[func.op] = branch
             return (logical_tree, cte_list)
 
     elif isinstance(func, TwoArgFunction):
-        cte_list.append(create_cte(opstr=func.op, symbol=func.lhs, value=func.rhs))
-        return (len(cte_list)-1, cte_list)
-    
+        cte_list.append(
+            create_cte(opstr=func.op, symbol=func.lhs, value=func.rhs)
+        )
+        return (len(cte_list) - 1, cte_list)
+
     elif isinstance(func, NArgFunction):
         branches = list()
         for arg in func.args:
@@ -255,12 +264,13 @@ logical_operators = {
     "not": not_,
 }
 
+
 def generate_logic(root, tree: int | dict[str, int | dict | list]):
     if isinstance(tree, int):
         return getattr(root.c, f"cte{tree}") == 1
     if not isinstance(tree, dict) or len(tree.keys()) != 1:
         raise ValueError
-    
+
     op = list(tree.keys())[0]
     if op == "and" or op == "or":
         args = tree[op]
@@ -279,9 +289,9 @@ def generate_logic(root, tree: int | dict[str, int | dict | list]):
         if isinstance(arg, list):
             raise ValueError
         return (
-            (getattr(root.c, f"cte{arg}") == 1)
+            (getattr(root.c, f"cte{arg}") == 0)
             if isinstance(arg, int)
-            else generate_logic(root, arg)
+            else not_(generate_logic(root, arg))
         )
     else:
         raise ValueError

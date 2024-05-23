@@ -63,7 +63,7 @@ def get_evaluation_status(
 def get_labels(
     *,
     db: Session,
-    filters: schemas.Filter | None = None,
+    filters: schemas.FilterType | None = None,
     ignore_prediction_labels=False,
     ignore_groundtruth_labels=False,
     offset: int = 0,
@@ -78,7 +78,7 @@ def get_labels(
     ----------
     db : Session
         The database Session to query against.
-    filters : schemas.Filter, optional
+    filters : schemas.FilterType, optional
         An optional filter to apply.
     ignore_prediction_labels : bool, default=False
         Option to ignore prediction labels in the result.
@@ -110,7 +110,7 @@ def get_labels(
 def get_datums(
     *,
     db: Session,
-    filters: schemas.Filter | None = None,
+    filters: schemas.FilterType | None = None,
     offset: int = 0,
     limit: int = -1,
 ) -> tuple[list[schemas.Datum], dict[str, str]]:
@@ -123,7 +123,7 @@ def get_datums(
     ----------
     db : Session
         The database Session to query against.
-    filters : schemas.Filter, optional
+    filters : schemas.FilterType, optional
         An optional filter to apply.
     offset : int, optional
         The start index of the items to return.
@@ -170,7 +170,7 @@ def get_dataset(
 def get_datasets(
     *,
     db: Session,
-    filters: schemas.Filter | None = None,
+    filters: schemas.FilterType | None = None,
     offset: int = 0,
     limit: int = -1,
 ) -> tuple[list[schemas.Dataset], dict[str, str]]:
@@ -183,7 +183,7 @@ def get_datasets(
     ----------
     db : Session
         The database Session to query against.
-    filters : schemas.Filter, optional
+    filters : schemas.FilterType, optional
         An optional filter to apply.
     offset : int, optional
         The start index of the items to return.
@@ -261,7 +261,7 @@ def get_model(*, db: Session, model_name: str) -> schemas.Model:
 def get_models(
     *,
     db: Session,
-    filters: schemas.Filter | None = None,
+    filters: schemas.FilterType | None = None,
     offset: int = 0,
     limit: int = -1,
 ) -> tuple[list[schemas.Model], dict[str, str]]:
@@ -274,7 +274,7 @@ def get_models(
     ----------
     db : Session
         The database Session to query against.
-    filters : schemas.FilterQueryParams, optional
+    filters : schemas.FilterTypeQueryParams, optional
         An optional filter to constrain results by.
     offset : int, optional
         The start index of the items to return.

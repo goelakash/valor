@@ -78,7 +78,8 @@ def test_EvaluationParameters():
 
 def test_EvaluationRequest():
     schemas.EvaluationRequest(
-        model_names=["name"],
+        dataset_names=["dataset"],
+        model_names=["model"],
         datum_filter=None,
         parameters=schemas.EvaluationParameters(
             task_type=enums.TaskType.CLASSIFICATION
@@ -86,7 +87,8 @@ def test_EvaluationRequest():
         meta={},
     )
     schemas.EvaluationRequest(
-        model_names=["name"],
+        dataset_names=["dataset"],
+        model_names=["model"],
         datum_filter=None,
         parameters=schemas.EvaluationParameters(
             task_type=enums.TaskType.CLASSIFICATION
@@ -94,6 +96,7 @@ def test_EvaluationRequest():
         meta={},
     )
     schemas.EvaluationRequest(
+        dataset_names=["dataset"],
         model_names=["name", "other"],
         datum_filter=None,
         parameters=schemas.EvaluationParameters(
@@ -106,6 +109,7 @@ def test_EvaluationRequest():
     with pytest.raises(ValidationError):
         schemas.EvaluationRequest(
             model_filter=None,  # type: ignore - purposefully throwing error
+            dataset_names=[],
             datum_filter=None,
             parameters=schemas.EvaluationParameters(
                 task_type=enums.TaskType.CLASSIFICATION
@@ -114,6 +118,7 @@ def test_EvaluationRequest():
     with pytest.raises(ValidationError):
         schemas.EvaluationRequest(
             model_names=["name"],
+            dataset_names=[],
             datum_filter=None,  # type: ignore - purposefully throwing error
             parameters=schemas.EvaluationParameters(
                 task_type=enums.TaskType.CLASSIFICATION
@@ -122,6 +127,7 @@ def test_EvaluationRequest():
     with pytest.raises(ValidationError):
         schemas.EvaluationRequest(
             model_names=["name"],
+            dataset_names=[],
             datum_filter=None,
             parameters=None,  # type: ignore - purposefully throwing error
         )
@@ -142,10 +148,7 @@ def test_EvaluationRequest():
     with pytest.raises(ValidationError):
         schemas.EvaluationRequest(
             model_filter=None,  # type: ignore - purposefully throwing error
-            datum_filter=TwoArg
-            schemas.Filter(
-                task_types=[enums.TaskType.CLASSIFICATION]
-            ),
+            datum_filter="string",
             parameters=schemas.EvaluationParameters(
                 task_type=enums.TaskType.CLASSIFICATION
             ),
@@ -155,6 +158,7 @@ def test_EvaluationRequest():
 def test_EvaluationResponse():
     schemas.EvaluationResponse(
         id=1,
+        dataset_names=["dataset"],
         model_name="test",
         datum_filter=None,
         parameters=schemas.EvaluationParameters(
@@ -171,6 +175,7 @@ def test_EvaluationResponse():
     with pytest.raises(ValidationError):
         schemas.EvaluationResponse(
             id=None,  # type: ignore - purposefully throwing error
+            dataset_names=["dataset"],
             model_name="test",
             datum_filter=None,
             parameters=schemas.EvaluationParameters(
@@ -187,6 +192,7 @@ def test_EvaluationResponse():
     with pytest.raises(ValidationError):
         schemas.EvaluationResponse(
             id=1,
+            dataset_names=["dataset"],
             model_name=None,  # type: ignore - purposefully throwing error
             datum_filter=None,
             parameters=schemas.EvaluationParameters(
@@ -203,6 +209,7 @@ def test_EvaluationResponse():
     with pytest.raises(ValidationError):
         schemas.EvaluationResponse(
             id=1,
+            dataset_names=["dataset"],
             model_name="name",
             datum_filter=None,
             parameters=None,  # type: ignore - purposefully throwing error
@@ -217,6 +224,7 @@ def test_EvaluationResponse():
     with pytest.raises(ValidationError):
         schemas.EvaluationResponse(
             id=1,
+            dataset_names=["dataset"],
             model_name="name",
             datum_filter=None,
             parameters=schemas.EvaluationParameters(

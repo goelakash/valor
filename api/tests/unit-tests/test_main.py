@@ -906,8 +906,9 @@ def test_delete_model(crud, client: TestClient):
 def test_post_detection_metrics(client: TestClient):
     response = schemas.EvaluationResponse(
         id=1,
+        dataset_names=["dsetname"],
         model_name="modelname",
-        datum_filter=schemas.Filter(dataset_names=["dsetname"]),
+        datum_filter=None,
         parameters=schemas.EvaluationParameters(
             task_type=TaskType.OBJECT_DETECTION
         ),
@@ -921,10 +922,9 @@ def test_post_detection_metrics(client: TestClient):
     ).model_dump()
 
     example_json = schemas.EvaluationRequest(
+        dataset_names=["dsetname"],
         model_names=["modelname"],
-        datum_filter=schemas.Filter(
-            dataset_names=["dsetname"],
-        ),
+        datum_filter=None,
         parameters=schemas.EvaluationParameters(
             task_type=TaskType.OBJECT_DETECTION
         ),
@@ -943,8 +943,9 @@ def test_post_detection_metrics(client: TestClient):
 def test_post_clf_metrics(client: TestClient):
     response = schemas.EvaluationResponse(
         id=1,
+        dataset_names=["dsetname"],
         model_name="modelname",
-        datum_filter=schemas.Filter(dataset_names=["dsetname"]),
+        datum_filter=None,
         parameters=schemas.EvaluationParameters(
             task_type=TaskType.CLASSIFICATION
         ),
@@ -956,8 +957,9 @@ def test_post_clf_metrics(client: TestClient):
     ).model_dump()
 
     example_json = schemas.EvaluationRequest(
+        dataset_names=["dsetname"],
         model_names=["modelname"],
-        datum_filter=schemas.Filter(dataset_names=["dsetname"]),
+        datum_filter=None,
         parameters=schemas.EvaluationParameters(
             task_type=TaskType.CLASSIFICATION
         ),
@@ -976,8 +978,9 @@ def test_post_clf_metrics(client: TestClient):
 def test_post_semenatic_segmentation_metrics(client: TestClient):
     response = schemas.EvaluationResponse(
         id=1,
+        dataset_names=["dsetname"],
         model_name="modelname",
-        datum_filter=schemas.Filter(dataset_names=["dsetname"]),
+        datum_filter=None,
         parameters=schemas.EvaluationParameters(
             task_type=TaskType.SEMANTIC_SEGMENTATION
         ),
@@ -991,8 +994,9 @@ def test_post_semenatic_segmentation_metrics(client: TestClient):
     ).model_dump()
 
     example_json = schemas.EvaluationRequest(
+        dataset_names=["dsetname"],
         model_names=["modelname"],
-        datum_filter=schemas.Filter(dataset_names=["dsetname"]),
+        datum_filter=None,
         parameters=schemas.EvaluationParameters(
             task_type=TaskType.SEMANTIC_SEGMENTATION
         ),
@@ -1053,7 +1057,7 @@ def test_get_model_labels(crud, client: TestClient):
 @patch("valor_api.main.crud")
 def test_get_datums(crud, client: TestClient):
     crud.get_datums.return_value = ([], {"headers": "headers"})
-    resp = client.get("/data")
+    resp = client.post("/data")
     assert resp.status_code == 200
     crud.get_datums.assert_called_once()
 
@@ -1061,10 +1065,10 @@ def test_get_datums(crud, client: TestClient):
         "valor_api.main.crud.get_datums",
         side_effect=exceptions.DatasetDoesNotExistError(""),
     ):
-        resp = client.get("/data")
+        resp = client.post("/data")
         assert resp.status_code == 404
 
-    resp = client.post("/data")
+    resp = client.get("/data")
     assert resp.status_code == 405
 
 
@@ -1099,11 +1103,11 @@ def test_get_datum(crud, client: TestClient):
 @patch("valor_api.main.crud")
 def test_get_labels(crud, client: TestClient):
     crud.get_labels.return_value = ([], {"headers": "headers"})
-    resp = client.get("/labels")
+    resp = client.post("/labels")
     assert resp.status_code == 200
     crud.get_labels.assert_called_once()
 
-    resp = client.post("/labels")
+    resp = client.get("/labels")
     assert resp.status_code == 405
 
 

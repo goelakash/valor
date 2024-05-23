@@ -92,6 +92,8 @@ class EvaluationRequest(BaseModel):
 
     Attributes
     ----------
+    dataset_names : str | list[str]
+        The dataset(s) to evaluate over.
     model_names : str | list[str]
         The model(s) to evaluate.
     datum_filter : schemas.Filter
@@ -102,6 +104,7 @@ class EvaluationRequest(BaseModel):
         Metadata about the evaluation run
     """
 
+    dataset_names: list[str]
     model_names: list[str]
     dataset_names: list[str]
     datum_filter: FilterType | None
@@ -119,21 +122,14 @@ class EvaluationRequest(BaseModel):
     def _validate_request(cls, values):
         """Validate the request."""
 
-        # verify filters do not contain task type.
-        if values.datum_filter.task_types is not None:
+        if not values.dataset_names:
             raise ValueError(
-                "`datum_filter` should not define the task_types constraint. Please set this in evaluation `parameters`."
+                "Evaluation request should specify at least one dataset."
             )
-
-        # verify `model_names` is of type list[str]
-        if isinstance(values.model_names, list):
-            if len(values.model_names) == 0:
-                raise ValueError(
-                    "`model_names` should specify at least one model."
-                )
-        elif isinstance(values.model_names, str):
-            values.model_names = [values.model_names]
-
+        if not values.model_names:
+            raise ValueError(
+                "Evaluation request should specify at least one model."
+            )
         return values
 
 
@@ -145,6 +141,8 @@ class EvaluationResponse(BaseModel):
     ----------
     id : int
         The ID of the evaluation.
+    dataset_names : list[str]
+        The names of the datasets to include.
     model_name : str
         The name of the evaluated model.
     datum_filter : schemas.Filter
@@ -168,8 +166,9 @@ class EvaluationResponse(BaseModel):
     """
 
     id: int
+    dataset_names: list[str]
     model_name: str
-    datum_filter: FilterType
+    datum_filter: FilterType | None
     parameters: EvaluationParameters
     status: EvaluationStatus
     created_at: datetime.datetime
