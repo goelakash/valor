@@ -51,14 +51,6 @@ from valor_api.schemas.geometry import (
     Polygon,
 )
 
-category_to_supported_operations = {
-    "nullable": {"isnull", "isnotnull"},
-    "equatable": {"eq", "ne"},
-    "quantifiable": {"gt", "ge", "lt", "le"},
-    "spatial": {"intersects", "inside", "outside"},
-}
-
-
 opstr_to_operator = {
     "equal": operator.eq,
     "notequal": operator.ne,
@@ -74,51 +66,6 @@ opstr_to_operator = {
     "isnotnull": lambda lhs, _: lhs.isnot(None),
 }
 
-
-filterable_types_to_function_category = {
-    "bool": {"equatable"},
-    "string": {"equatable"},
-    "integer": {"equatable", "quantifiable"},
-    "float": {"equatable", "quantifiable"},
-    "datetime": {"equatable", "quantifiable"},
-    "date": {"equatable", "quantifiable"},
-    "time": {"equatable", "quantifiable"},
-    "duration": {"equatable", "quantifiable"},
-    "point": {"equatable", "spatial"},
-    "multipoint": {"spatial"},
-    "linestring": {"spatial"},
-    "multilinestring": {"spatial"},
-    "polygon": {"spatial"},
-    "box": {"spatial"},
-    "multipolygon": {"spatial"},
-    "raster": {"spatial"},
-    "tasktypeenum": {"equatable"},
-    "label": {"equatable"},
-    "embedding": {},
-}
-
-
-symbol_name_to_categories = {
-    "dataset.name": {"equatable"},
-    "dataset.metadata": {},
-    "model.name": {"equatable"},
-    "model.metadata": {},
-    "datum.uid": {"equatable"},
-    "datum.metadata": {},
-    "annotation.box": {"spatial", "nullable"},
-    "annotation.polygon": {"spatial", "nullable"},
-    "annotation.raster": {"spatial", "nullable"},
-    "annotation.embedding": {},
-    "annotation.metadata": {},
-    "annotation.labels": {"equatable"},
-    "label.key": {"equatable"},
-    "label.value": {"equatable"},
-}
-
-
-symbol_attribute_to_categories = {
-    "area": {"equatable", "quantifiable"},
-}
 
 symbol_name_to_row_id_value = {
     "dataset.name": (Dataset.id, Dataset.name),
@@ -137,6 +84,7 @@ symbol_name_to_row_id_value = {
     "label.value": (Label.id, Label.value),
 }
 
+
 symbol_supports_attribute = {
     "area": {
         "annotation.box": lambda x: ST_Area(x),
@@ -149,12 +97,6 @@ symbol_supports_attribute = {
     }
 }
 
-symbol_supports_key = {
-    "dataset.metadata",
-    "model.metadata",
-    "datum.metadata",
-    "annotation.metadata",
-}
 
 metadata_symbol_type_casting = {
     "bool": lambda x: x.astext.cast(Boolean),

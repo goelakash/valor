@@ -3,14 +3,14 @@ from sqlalchemy import (
     Boolean,
     Float,
     Integer,
+    alias,
     and_,
+    case,
     cast,
     func,
     not_,
     or_,
     select,
-    case,
-    alias,
 )
 from sqlalchemy.sql.elements import BinaryExpression, ColumnElement
 
@@ -23,9 +23,11 @@ from valor_api.backend.models import (
     Model,
     Prediction,
 )
-from valor_api.backend.query.filtering import _recursive_search_logic_tree, generate_logic
+from valor_api.backend.query.filtering import (
+    _recursive_search_logic_tree,
+    generate_logic,
+)
 from valor_api.backend.query.mapping import map_arguments_to_tables
-from valor_api.backend.query.solvers import solve_graph
 from valor_api.backend.query.types import TableTypeAlias
 from valor_api.schemas.filters import FilterType
 
@@ -60,20 +62,21 @@ class Query:
         self._selected = map_arguments_to_tables(args)
         return self
 
-    def filter(self, conditions: FilterType, pivot = Annotation):
+    def filter(
+        self,
+        conditions: FilterType | None,
+        pivot=Annotation,
+        is_groundtruth: bool = True,
+    ):
+        gt_or_pd = GroundTruth if is_groundtruth else Prediction
         tree, ctes = _recursive_search_logic_tree(conditions)
-
         if not ctes or not tree:
             raise ValueError
-
         agg = (
             select(
                 pivot.id.label("pivot_id"),
                 *[
-                    case(
-                        (row_id == cte.c.id, 1),
-                        else_=0
-                    ).label(f"cte{idx}")
+                    case((row_id == cte.c.id, 1), else_=0).label(f"cte{idx}")
                     for idx, (row_id, cte) in enumerate(ctes)
                 ],
             )
@@ -81,36 +84,47 @@ class Query:
             .join(Datum, Datum.id == Annotation.datum_id)
             .join(Dataset, Dataset.id == Datum.dataset_id)
         )
+        agg = self.filter(conditions, pivot)
+
         for row_id, cte in ctes:
             if row_id == Label.id:
-                gt = alias(GroundTruth)
-                agg = agg.join(gt, gt.c.annotation_id == Annotation.id)
-                agg = agg.join(cte, cte.c.id == gt.c.label_id, isouter=True)
+                label_linker = alias(gt_or_pd)
+                agg = agg.join(
+                    label_linker, label_linker.c.annotation_id == Annotation.id
+                )
+                agg = agg.join(
+                    cte, cte.c.id == label_linker.c.label_id, isouter=True
+                )
             else:
                 agg = agg.join(cte, cte.c.id == row_id, isouter=True)
         agg = agg.cte()
 
-        q = (
-            select(*self._args)
-            .select_from(pivot)
-        )
+        q = select(*self._args).select_from(pivot)
         if pivot is Annotation:
             q = q.join(Datum, Datum.id == Annotation.datum_id)
             q = q.join(Dataset, Dataset.id == Datum.dataset_id)
-            q = q.join(GroundTruth, GroundTruth.annotation_id == Annotation.id)
-            q = q.join(Label, Label.id == GroundTruth.label_id)
-            
+            q = q.join(gt_or_pd, gt_or_pd.annotation_id == Annotation.id)
+            q = q.join(Label, Label.id == gt_or_pd.label_id)
+
         elif pivot is Datum:
             q = q.join(Annotation, Annotation.datum_id == Datum.id)
             q = q.join(Dataset, Dataset.id == Datum.dataset_id)
-            q = q.join(GroundTruth, GroundTruth.annotation_id == Annotation.id)
-            q = q.join(Label, Label.id == GroundTruth.label_id)
-    
+            q = q.join(gt_or_pd, gt_or_pd.annotation_id == Annotation.id)
+            q = q.join(Label, Label.id == gt_or_pd.label_id)
+
         q = q.join(agg, agg.c.pivot_id == pivot.id)
         return q.where(generate_logic(agg, tree))
-    
-    def filter_annotations(self, conditions: FilterType):
-        return self.filter(conditions, pivot=Annotation)
-    
-    def filter_datums(self, conditions: FilterType):
-        return self.filter(conditions, pivot=Datum)
+
+    def filter_groundtruths(
+        self, conditions: FilterType | None, pivot=Annotation
+    ):
+        return self.filter(
+            conditions=conditions, pivot=pivot, is_groundtruth=False
+        )
+
+    def filter_predictions(
+        self, conditions: FilterType | None, pivot=Annotation
+    ):
+        return self.filter(
+            conditions=conditions, pivot=pivot, is_groundtruth=False
+        )
